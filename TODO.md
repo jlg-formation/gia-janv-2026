@@ -1,7 +1,7 @@
 # TODO — RAG-TP (Retrieval-Augmented Generation)
 
 > Dernière mise à jour : 2026-01-28 14:12
-> Progression : 2/38 tâches (5%)
+> Progression : 3/38 tâches (8%)
 
 ## 🎯 Objectif actuel
 
@@ -23,7 +23,7 @@
   - 🔗 Dépend de : `id001`
   - 📄 Réf : [04-decisions-architectures.md](docs/04-decisions-architectures.md) (ADR-003)
 
-- [ ] `id003` — Initialiser le frontend React avec Vite et TypeScript
+- [x] `id003` — Initialiser le frontend React avec Vite et TypeScript
   - 📁 Fichiers : `project/frontend/package.json`, `project/frontend/tsconfig.json`, `project/frontend/vite.config.ts`
   - 🔗 Dépend de : `id001`
   - 📄 Réf : [04-decisions-architectures.md](docs/04-decisions-architectures.md) (ADR-002)
