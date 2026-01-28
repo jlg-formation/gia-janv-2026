@@ -2,315 +2,323 @@
 
 ## Contexte architectural
 
-Ce document recense les décisions architecturales prises pour le prototype RAG (Retrieval-Augmented Generation). L'objectif est de concevoir un pipeline modulaire, extensible et adapté à un contexte pédagogique (TP), tout en restant proche des pratiques industrielles.
+Ce document recense les décisions architecturales prises pour le prototype RAG (Retrieval-Augmented Generation). Suite à la clarification 002, le projet adopte une stack **TypeScript/React/Node.js** au lieu de Python.
 
 ### Vue d'ensemble (OBLIGATOIRE)
 
 ```mermaid
 graph TB
-    subgraph "Couche Ingestion"
-        LOAD[Document Loader]
-        CHUNK[Chunker]
+    subgraph "Frontend React"
+        UI[Interface utilisateur]
+        QUERY[Query Input]
+        RESULTS[Results Display]
+    end
+    subgraph "Backend Node.js"
+        API[Express API]
+        INGEST[Ingestion Service]
+        CHUNK[Chunker Service]
         EMBED[Embedding Service]
+        SEARCH[Search Service]
+        GEN[Generation Service]
     end
-    subgraph "Couche Indexation"
+    subgraph "Data Layer"
         VSTORE[(Vector Store)]
-        META[(Metadata Store)]
+        META[(SQLite Metadata)]
     end
-    subgraph "Couche Retrieval"
-        QUERY[Query Encoder]
-        SEARCH[Similarity Search]
-        RANK[Ranker / Top-k]
-    end
-    subgraph "Couche Generation"
-        PROMPT[Prompt Builder]
-        LLM[LLM Service]
-        FORMAT[Response Formatter]
-    end
-    subgraph "Interface"
-        CLI[CLI / API]
+    subgraph "External"
+        LLM[LLM API]
+        EMBEDAPI[Embedding API]
     end
 
-    CLI --> LOAD
-    LOAD --> CHUNK --> EMBED --> VSTORE
+    UI --> API
+    QUERY --> API
+    API --> INGEST --> CHUNK --> EMBED --> VSTORE
     EMBED --> META
-    CLI --> QUERY
-    QUERY --> SEARCH
-    SEARCH --> VSTORE
-    SEARCH --> RANK --> PROMPT
-    PROMPT --> LLM --> FORMAT --> CLI
+    API --> SEARCH --> VSTORE
+    SEARCH --> GEN --> LLM
+    EMBED --> EMBEDAPI
+    RESULTS --> UI
+    GEN --> API --> RESULTS
 ```
 
 ---
 
 ## Registre des décisions
 
-### ADR-001 : Langage de développement — Python
+### ADR-001 : Langage de développement — TypeScript
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
-| Décideurs | Équipe TP |
+| Statut    | Accepté (modifié via clarification 002) |
+| Décideurs | Utilisateur (clarification) |
 
 #### Contexte
 
-Le brief mentionne un prototype RAG sans imposer de stack. Dans le domaine NLP/LLM, Python est le langage dominant avec un écosystème mature (LangChain, LlamaIndex, sentence-transformers, FAISS, etc.).
+La clarification utilisateur `001-langage.md` a explicitement demandé TypeScript/React. Cette décision prévaut sur le choix initial Python selon la règle C7 (précédence).
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **Python** | Écosystème NLP/LLM très riche, facilité d'intégration, nombreux exemples, adapté au prototypage | Performance runtime (acceptable pour un TP) |
-| TypeScript/Node | Moderne, bon outillage web | Moins de libs ML natives, bindings complexes |
-| Go/Rust | Performance, binaires compilés | Écosystème LLM naissant, plus long à développer |
+| **TypeScript** | Typage statique, écosystème React mature, full-stack JS | Écosystème ML/NLP moins riche que Python |
+| Python | Écosystème NLP/LLM très riche | Décision annulée par clarification |
 
 #### Décision
 
-**Python 3.11+** est retenu pour le prototype. Il offre le meilleur compromis productivité / écosystème pour un TP RAG.
+**TypeScript** est retenu pour l'ensemble du projet (frontend et backend).
 
 #### Conséquences
 
-- **Positives** : Accès direct à sentence-transformers, FAISS, OpenAI SDK, Langchain si souhaité.
-- **Négatives** : Packaging et dépendances (virtualenv, pip).
-- **Risques** : Compatibilité de versions de libs ML (mitigé via `pyproject.toml` ou `requirements.txt` lock).
+- **Positives** : Stack unifiée, partage de types entre front et back, écosystème npm riche.
+- **Négatives** : Moins de libs ML natives, dépendance aux APIs externes pour embeddings.
+- **Risques** : Certaines fonctionnalités RAG avancées moins accessibles qu'en Python.
 
 ---
 
-### ADR-002 : Base de données vectorielle — FAISS (local)
+### ADR-002 : Framework Frontend — React
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
-| Décideurs | Équipe TP |
+| Statut    | Accepté |
+| Décideurs | Utilisateur (clarification) |
 
 #### Contexte
 
-Le pipeline requiert une base vectorielle pour stocker les embeddings et exécuter des recherches par similarité (ANN). Le brief n'impose pas de solution.
+Le frontend doit permettre de saisir des questions, afficher les réponses et les sources.
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **FAISS (local)** | Open-source, performant, pas de service externe, facile à installer via pip | Pas de persistance native (sérialization manuelle), pas de métadonnées intégrées |
-| ChromaDB | Persistance intégrée, métadonnées, API simple | Dépendance supplémentaire, moins mature |
-| Pinecone / Weaviate (cloud) | Scalabilité, gestion hébergée | Nécessite compte/API key, latence réseau, hors scope TP |
-| Qdrant (local/cloud) | Riche en fonctionnalités | Plus lourd pour un TP basique |
+| **React** | Demandé par l'utilisateur, large écosystème, composants réutilisables | Nécessite configuration build |
+| Vue.js | Simplicité, bonne DX | Non demandé |
+| Vanilla JS | Pas de dépendances | Moins maintenable |
 
 #### Décision
 
-**FAISS** est retenu pour sa simplicité et ses performances. La persistance sera gérée via `faiss.write_index` / `faiss.read_index`. Les métadonnées (chunk text, doc source) seront stockées dans un fichier JSON ou SQLite annexe.
+**React** avec TypeScript. Utilisation de Vite pour le bundling.
 
 #### Conséquences
 
-- **Positives** : Installation simple (`pip install faiss-cpu`), recherche rapide, contrôle total.
-- **Négatives** : Gestion manuelle de la persistance et des métadonnées.
-- **Risques** : Si le corpus grossit, envisager ChromaDB ou Qdrant (évolution future).
+- **Positives** : Composants modulaires, hot reload, large communauté.
+- **Négatives** : Complexité initiale vs vanilla.
+- **Risques** : Aucun majeur pour un prototype.
 
 ---
 
-### ADR-003 : Modèle d'embedding — sentence-transformers (local)
+### ADR-003 : Framework Backend — Express.js
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
-| Décideurs | Équipe TP |
+| Statut    | Accepté |
+| Décideurs | Utilisateur (clarification) |
 
 #### Contexte
 
-Les chunks doivent être vectorisés. Le choix du modèle d'embedding impacte la qualité du retrieval et la latence.
+Le backend expose une API REST pour l'ingestion et les requêtes RAG.
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **sentence-transformers (all-MiniLM-L6-v2)** | Open-source, léger (~80 Mo), fonctionne en local, bonne qualité | Moins performant que modèles plus lourds |
-| OpenAI text-embedding-ada-002 / text-embedding-3-small | Très bonne qualité | Coût API, dépendance réseau |
-| Cohere Embed | Qualité, multilingue | Coût API |
-| BGE / E5 (Hugging Face) | Très bonne qualité, open | Plus lourd, GPU recommandé |
+| **Express.js** | Standard de facto, simple, middleware riche | Performances moyennes |
+| Fastify | Performant, schéma JSON intégré | Moins de middlewares tiers |
+| Next.js API Routes | Full-stack intégré | Moins flexible pour API pure |
 
 #### Décision
 
-**sentence-transformers** avec le modèle `all-MiniLM-L6-v2` est retenu par défaut. Il offre un bon compromis qualité/légèreté pour un TP. Le modèle est configurable (RG-008) pour permettre d'expérimenter.
+**Express.js** pour sa simplicité et son écosystème. Fastify est une alternative acceptable si la performance devient critique.
 
 #### Conséquences
 
-- **Positives** : Fonctionne sans GPU, installation simple, pas de clé API.
-- **Négatives** : Qualité légèrement inférieure aux modèles cloud.
-- **Risques** : Si besoin de multilingue ou de meilleure qualité, migrer vers OpenAI ou BGE.
+- **Positives** : Démarrage rapide, nombreux exemples, middlewares disponibles.
+- **Négatives** : Moins performant que Fastify pour du high-throughput.
+- **Risques** : Aucun pour un prototype.
 
 ---
 
-### ADR-004 : LLM — API OpenAI (GPT-4o-mini) avec fallback mock
+### ADR-004 : Base de données vectorielle — ChromaDB ou Qdrant
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
+| Statut    | Accepté |
 | Décideurs | Équipe TP |
 
 #### Contexte
 
-La génération de réponse nécessite un LLM. Le brief mentionne la configurabilité (GPT, Claude, Mistral, Ollama).
+Le pipeline RAG requiert une base vectorielle pour stocker les embeddings et exécuter des recherches par similarité.
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **OpenAI API (GPT-4o-mini)** | Qualité, simplicité d'intégration, coût raisonnable | Requiert clé API, dépendance réseau |
-| Ollama (local) | Gratuit, offline | GPU recommandé, qualité variable selon modèle |
-| Claude API | Très bonne qualité | Coût, moins courant en TP |
-| Mistral API | Bon rapport qualité/prix | Moins d'exemples disponibles |
+| **ChromaDB** | Open-source, API REST, client JS disponible | Moins mature que FAISS |
+| **Qdrant** | Performant, API REST, client TypeScript | Service à lancer séparément |
+| FAISS | Performant | Pas de binding Node.js natif simple |
+| Pinecone | Managed, scalable | Coût, dépendance cloud |
 
 #### Décision
 
-**OpenAI GPT-4o-mini** est le LLM par défaut (bon rapport qualité/coût). Un **mode mock** (RG-026) est implémenté pour permettre les tests sans appel API. La configuration permet de basculer vers Ollama ou un autre provider.
+**ChromaDB** en mode serveur local (Docker) avec le client `chromadb` npm. Alternative : **Qdrant** avec `@qdrant/js-client-rest`.
 
 #### Conséquences
 
-- **Positives** : Qualité de génération élevée, SDK Python bien documenté.
-- **Négatives** : Nécessite une clé API, coût (faible pour un TP).
-- **Risques** : Si pas de clé, fallback mock ou Ollama.
+- **Positives** : API REST accessible depuis Node.js, persistance intégrée.
+- **Négatives** : Nécessite Docker pour le serveur ChromaDB/Qdrant.
+- **Risques** : Si Docker non disponible, envisager une solution in-memory.
 
 ---
 
-### ADR-005 : Architecture logicielle — Modules découplés (Clean Architecture légère)
+### ADR-005 : Modèle d'embedding — API OpenAI ou Transformers.js
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
+| Statut    | Accepté |
 | Décideurs | Équipe TP |
 
 #### Contexte
 
-Le prototype doit être maintenable, testable et extensible (changement de vector store, de modèle, etc.).
+Les chunks doivent être vectorisés. En TypeScript, les options locales sont plus limitées qu'en Python.
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **Modules découplés (ports/adapters simplifié)** | Testabilité, remplacement facile des composants | Légère complexité initiale |
-| Script monolithique | Rapidité de dev initiale | Difficile à maintenir, tester, étendre |
-| Framework complet (LangChain) | Abstraction, nombreux connecteurs | Courbe d'apprentissage, dépendance forte |
+| **OpenAI text-embedding-3-small** | Qualité, simplicité d'intégration | Coût API, dépendance réseau |
+| **@xenova/transformers** | Local, gratuit, modèles HuggingFace | Plus lent, plus lourd |
+| Cohere Embed | Qualité | Coût API |
+
+#### Décision
+
+**OpenAI text-embedding-3-small** par défaut (SDK `openai` npm). Option **@xenova/transformers** pour mode offline/gratuit avec modèle `all-MiniLM-L6-v2`.
+
+#### Conséquences
+
+- **Positives** : Qualité élevée avec OpenAI, option locale disponible.
+- **Négatives** : Coût API pour OpenAI.
+- **Risques** : Si pas de clé API, fallback sur transformers.js (plus lent).
+
+---
+
+### ADR-006 : LLM — API OpenAI GPT-4o-mini
+
+| Attribut  | Valeur   |
+| --------- | -------- |
+| Date      | 2026-01-28 |
+| Statut    | Accepté |
+| Décideurs | Équipe TP |
+
+#### Contexte
+
+La génération de réponse nécessite un LLM. Le SDK OpenAI pour Node.js est mature.
+
+#### Options considérées
+
+| Option | Avantages | Inconvénients |
+| ------ | --------- | ------------- |
+| **OpenAI GPT-4o-mini** | Qualité, SDK Node.js, coût raisonnable | Requiert clé API |
+| Anthropic Claude | Qualité | Moins d'exemples Node.js |
+| Ollama (local) | Gratuit, offline | Nécessite installation, GPU recommandé |
+
+#### Décision
+
+**OpenAI GPT-4o-mini** via le SDK `openai`. Un **mode mock** est implémenté pour les tests sans API.
+
+#### Conséquences
+
+- **Positives** : Intégration simple, bonne qualité.
+- **Négatives** : Coût (faible pour un TP).
+- **Risques** : Si pas de clé, utiliser le mode mock.
+
+---
+
+### ADR-007 : Architecture logicielle — Modules découplés
+
+| Attribut  | Valeur   |
+| --------- | -------- |
+| Date      | 2026-01-28 |
+| Statut    | Accepté |
+| Décideurs | Équipe TP |
+
+#### Contexte
+
+Le prototype doit être maintenable, testable et extensible.
 
 #### Décision
 
 Architecture en **modules découplés** :
 
-- `ingestion/` : loader, chunker, embedder
-- `indexing/` : vector store adapter
-- `retrieval/` : query encoder, searcher
-- `generation/` : prompt builder, llm adapter, formatter
-- `config/` : gestion configuration (YAML/env)
-- `cli/` : point d'entrée
+```
+src/
+├── api/           # Routes Express
+├── services/
+│   ├── ingestion/ # Loader, Chunker
+│   ├── embedding/ # Embedding service
+│   ├── search/    # Vector search
+│   └── generation/# Prompt builder, LLM caller
+├── repositories/  # Vector store, metadata store
+├── config/        # Configuration
+└── types/         # TypeScript interfaces
+```
 
-Chaque composant expose une interface (protocole Python) permettant de substituer l'implémentation.
+Chaque service expose une interface permettant de substituer l'implémentation.
 
 #### Conséquences
 
 - **Positives** : Tests unitaires facilités, swap de vector store ou LLM sans toucher au reste.
 - **Négatives** : Plus de fichiers que l'approche script unique.
-- **Risques** : Sur-ingénierie évitée en gardant les interfaces simples.
 
 ---
 
-### ADR-006 : Gestion de la configuration — Fichier YAML + variables d'environnement
+### ADR-008 : Gestion de la configuration — dotenv + fichier config
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
+| Statut    | Accepté |
 | Décideurs | Équipe TP |
 
 #### Contexte
 
-De nombreux paramètres sont configurables (chunk size, overlap, top-k, modèle, clé API, etc.). Il faut un mécanisme simple et reproductible.
-
-#### Options considérées
-
-| Option | Avantages | Inconvénients |
-| ------ | --------- | ------------- |
-| **YAML + env vars** | Lisible, standard, secrets séparés | Parsing manuel (mitigé via pydantic-settings) |
-| Fichier .env seul | Simple | Moins structuré pour configs complexes |
-| Arguments CLI uniquement | Explicite | Verbeux, difficile à reproduire |
-| JSON | Standard | Moins lisible que YAML |
+De nombreux paramètres sont configurables (chunk size, top-k, clé API, etc.).
 
 #### Décision
 
-Un fichier `config.yaml` centralise la configuration. Les secrets (API keys) sont lus depuis des variables d'environnement ou un fichier `.env` (non versionné). La lib `pydantic-settings` valide et fusionne ces sources.
+- Variables d'environnement via `dotenv` (fichier `.env` non versionné)
+- Fichier `config.ts` centralisant les valeurs par défaut et la validation (avec `zod`)
 
 #### Conséquences
 
-- **Positives** : Reproductibilité (config versionnée), secrets protégés.
-- **Négatives** : Dépendance pydantic (acceptable).
-- **Risques** : Aucun majeur.
+- **Positives** : Secrets protégés, configuration typée.
+- **Négatives** : Nécessite de documenter les variables.
 
 ---
 
-### ADR-007 : Interface utilisateur — CLI (+ option API REST future)
+### ADR-009 : Persistance des métadonnées — SQLite avec better-sqlite3
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté  |
+| Statut    | Accepté |
 | Décideurs | Équipe TP |
 
 #### Contexte
 
-Le brief demande un prototype fonctionnel ; une interface minimale suffit pour la démo.
-
-#### Options considérées
-
-| Option | Avantages | Inconvénients |
-| ------ | --------- | ------------- |
-| **CLI (Typer/Click)** | Simple, scriptable, adapté au TP | Moins visuel |
-| API REST (FastAPI) | Standard, intégrable | Plus de code, hors scope MVP strict |
-| UI Web (Streamlit) | Démo visuelle | Dépendance, hors scope MVP |
+Les métadonnées (texte du chunk, document source) doivent être stockées.
 
 #### Décision
 
-**CLI** via `typer` pour le MVP. Commandes : `ingest`, `query`, `status`. Une API REST (FastAPI) pourra être ajoutée en évolution future.
+**SQLite** via `better-sqlite3` (synchrone, performant). Table `chunks` avec id, doc_id, text, position.
 
 #### Conséquences
 
-- **Positives** : Rapidité de développement, reproductibilité des tests.
-- **Négatives** : Moins attractif pour une démo visuelle.
-- **Risques** : Aucun (Streamlit peut être ajouté plus tard).
-
----
-
-### ADR-008 : Persistance des métadonnées — SQLite
-
-| Attribut  | Valeur   |
-| --------- | -------- |
-| Date      | 2026-01-28 |
-| Statut    | Accepté  |
-| Décideurs | Équipe TP |
-
-#### Contexte
-
-FAISS ne stocke pas les métadonnées (texte du chunk, doc source). Il faut une solution annexe.
-
-#### Options considérées
-
-| Option | Avantages | Inconvénients |
-| ------ | --------- | ------------- |
-| **SQLite** | Embarqué, requêtes SQL, robuste | Légère complexité |
-| Fichier JSON | Ultra simple | Moins performant, pas de requêtes |
-| Pickle | Simple | Sécurité, pas de requêtes |
-
-#### Décision
-
-**SQLite** pour stocker les métadonnées (table `chunks` avec id, doc_id, text, position). Permet des requêtes et reste sans serveur.
-
-#### Conséquences
-
-- **Positives** : Requêtes flexibles, robustesse, standard.
+- **Positives** : Requêtes SQL flexibles, pas de serveur.
 - **Négatives** : Fichier .db à gérer.
-- **Risques** : Aucun majeur.
 
 ---
 
@@ -319,10 +327,10 @@ FAISS ne stocke pas les métadonnées (texte du chunk, doc source). Il faut une 
 | Principe | Description | Rationale |
 | -------- | ----------- | --------- |
 | **Modularité** | Chaque composant (loader, embedder, store, llm) est remplaçable | Facilite les expérimentations et les tests |
-| **Configuration externalisée** | Aucun paramètre codé en dur | Reproductibilité, adaptation sans recompilation |
-| **Fail-fast** | Erreurs détectées au plus tôt (validation config, inputs) | Débogage simplifié |
-| **Observabilité** | Logs structurés, affichage des scores et sources | Compréhension du comportement RAG |
-| **Simplicité** | Pas de sur-ingénierie, focus sur le pipeline essentiel | Adapté à un TP, maintenabilité |
+| **Configuration externalisée** | Aucun paramètre codé en dur | Reproductibilité |
+| **Typage strict** | TypeScript strict mode activé | Fiabilité, autocomplétion |
+| **Fail-fast** | Erreurs détectées au plus tôt (validation zod) | Débogage simplifié |
+| **Observabilité** | Logs structurés (pino), affichage des scores et sources | Compréhension du comportement RAG |
 
 ---
 
@@ -330,11 +338,11 @@ FAISS ne stocke pas les métadonnées (texte du chunk, doc source). Il faut une 
 
 | Contrainte | Impact | Source |
 | ---------- | ------ | ------ |
-| Pas d'infrastructure cloud imposée | Tout doit tourner en local | Brief (contexte TP) |
-| Corpus de petite taille (< 1 Go) | Pas besoin de sharding, index en mémoire | Brief |
-| Accès API LLM optionnel | Prévoir mode mock/offline | Brief |
-| Temps de réponse < 5s | Limiter top-k, optimiser embeddings | Brief (objectif) |
-| Python 3.11+ | Compatibilité libs ML récentes | ADR-001 |
+| TypeScript/React imposé | Stack unifiée JS | Clarification utilisateur |
+| Corpus de petite taille | Pas besoin de sharding | Brief |
+| Accès API LLM optionnel | Prévoir mode mock | Brief |
+| Temps de réponse < 5s | Limiter top-k, optimiser | Brief |
+| Node.js 20+ | Support ESM, fetch natif | Best practice |
 
 ---
 
@@ -343,25 +351,25 @@ FAISS ne stocke pas les métadonnées (texte du chunk, doc source). Il faut une 
 ```mermaid
 sequenceDiagram
     participant U as Utilisateur
-    participant CLI as CLI
-    participant QE as Query Encoder
+    participant FE as React Frontend
+    participant API as Express API
+    participant EMB as Embedding Service
     participant VS as Vector Store
-    participant PB as Prompt Builder
-    participant LLM as LLM Service
-    participant FMT as Formatter
+    participant GEN as Generation Service
+    participant LLM as LLM API
 
-    U->>CLI: query "Ma question"
-    CLI->>QE: encode(question)
-    QE-->>CLI: embedding
-    CLI->>VS: search(embedding, top_k)
-    VS-->>CLI: passages[]
-    CLI->>PB: build(question, passages)
-    PB-->>CLI: prompt
-    CLI->>LLM: generate(prompt)
-    LLM-->>CLI: reponse
-    CLI->>FMT: format(reponse, passages)
-    FMT-->>CLI: output
-    CLI-->>U: Reponse + Sources
+    U->>FE: Saisir question
+    FE->>API: POST /api/query
+    API->>EMB: embed(question)
+    EMB-->>API: embedding vector
+    API->>VS: search(vector, top_k)
+    VS-->>API: passages[]
+    API->>GEN: generate(question, passages)
+    GEN->>LLM: completion(prompt)
+    LLM-->>GEN: response
+    GEN-->>API: formatted response
+    API-->>FE: JSON response + sources
+    FE-->>U: Afficher reponse
 ```
 
 ---
@@ -370,11 +378,12 @@ sequenceDiagram
 
 | ID | Titre | Décision | Statut |
 |----|-------|----------|--------|
-| ADR-001 | Langage | Python 3.11+ | Accepté |
-| ADR-002 | Vector Store | FAISS (local) | Accepté |
-| ADR-003 | Embedding | sentence-transformers (all-MiniLM-L6-v2) | Accepté |
-| ADR-004 | LLM | OpenAI GPT-4o-mini + mock | Accepté |
-| ADR-005 | Architecture | Modules découplés | Accepté |
-| ADR-006 | Configuration | YAML + env vars | Accepté |
-| ADR-007 | Interface | CLI (typer) | Accepté |
-| ADR-008 | Métadonnées | SQLite | Accepté |
+| ADR-001 | Langage | TypeScript | Accepté |
+| ADR-002 | Frontend | React | Accepté |
+| ADR-003 | Backend | Express.js | Accepté |
+| ADR-004 | Vector Store | ChromaDB / Qdrant | Accepté |
+| ADR-005 | Embedding | OpenAI / Transformers.js | Accepté |
+| ADR-006 | LLM | OpenAI GPT-4o-mini | Accepté |
+| ADR-007 | Architecture | Modules découplés | Accepté |
+| ADR-008 | Configuration | dotenv + config.ts | Accepté |
+| ADR-009 | Métadonnées | SQLite (better-sqlite3) | Accepté |

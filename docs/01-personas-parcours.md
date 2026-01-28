@@ -58,15 +58,15 @@ L’étudiant·e dispose d’un dossier de documents (ex: `.txt`, `.md`). Il/ell
 ```mermaid
 journey
     title Ingestion & Indexation du corpus
-    section Préparation
-      Mettre les documents au bon endroit: 3: Étudiant·e
-      Vérifier les formats et prérequis: 2: Étudiant·e
-    section Exécution
-      Lancer l'ingestion (CLI/script): 2: Étudiant·e
-      Observer logs et métriques (chunks, temps): 3: Étudiant·e
-    section Contrôle
-      Lancer une requête de test: 4: Étudiant·e
-      Corriger les paramètres (chunking/top-k): 3: Étudiant·e
+    section Preparation
+      Mettre les documents au bon endroit: 3: Etudiant
+      Verifier les formats et prerequis: 2: Etudiant
+    section Execution
+      Lancer ingestion CLI ou script: 2: Etudiant
+      Observer logs et metriques: 3: Etudiant
+    section Controle
+      Lancer une requete de test: 4: Etudiant
+      Corriger les parametres chunking top-k: 3: Etudiant
 ```
 
 ### Parcours : Question → Retrieval → Réponse (Utilisateur testeur)
@@ -89,16 +89,16 @@ Un utilisateur (testeur) pose une question. Le système récupère les passages 
 
 ```mermaid
 journey
-    title Question -> Retrieval -> Réponse
+    title Question puis Retrieval puis Reponse
     section Question
       Saisir une question: 4: Testeur
-      Valider la requête: 4: Testeur
+      Valider la requete: 4: Testeur
     section Retrieval
-      Consulter les passages retrouvés (top-k): 3: Testeur
+      Consulter les passages retrouves top-k: 3: Testeur
       Ajuster la question si besoin: 3: Testeur
-    section Génération
-      Lire la réponse générée: 4: Testeur
-      Vérifier les sources/citations: 5: Testeur
+    section Generation
+      Lire la reponse generee: 4: Testeur
+      Verifier les sources et citations: 5: Testeur
 ```
 
 ## Matrice Personas / Fonctionnalités
