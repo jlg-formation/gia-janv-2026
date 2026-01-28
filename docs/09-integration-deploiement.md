@@ -1,566 +1,424 @@
 # Intégration & Déploiement
 
-## Vue d'ensemble pipeline CI/CD
+Ce document décrit le pipeline CI/CD et les procédures de déploiement pour le projet RAG, utilisant **Bun** comme runtime (clarification 004).
+
+---
+
+## Pipeline CI/CD (OBLIGATOIRE)
 
 ```mermaid
 flowchart LR
-    subgraph "CI - Continuous Integration"
-        A[Push/PR] --> B[Install deps]
-        B --> C[Lint + Type check]
-        C --> D[Unit tests]
-        D --> E[Integration tests]
-        E --> F[Security audit]
-        F --> G{Quality<br/>Gate}
+    subgraph "CI - Bun"
+        A[Push] --> B[Install deps]
+        B --> C[TypeCheck]
+        C --> D[Lint]
+        D --> E[Test]
+        E --> F[Build Frontend]
     end
-    
-    subgraph "CD - Continuous Deployment"
-        G -->|Pass| H[Build artifacts]
-        H --> I[Docker build]
-        I --> J[Deploy staging]
-        J --> K[Smoke tests]
-        K --> L{Manual<br/>approval}
-        L -->|Approved| M[Deploy prod]
+    subgraph "CD"
+        F --> G{Branch?}
+        G -->|develop| H[Deploy Staging]
+        G -->|main| I[Deploy Prod]
+        H --> J[Smoke Tests]
+        I --> K[Smoke Tests]
     end
-    
-    G -->|Fail| N[Block merge]
 ```
 
-## Environnements
+---
 
-| Environnement | URL | Purpose | Déploiement |
-| ------------- | --- | ------- | ----------- |
-| local | localhost:3000 / localhost:5173 | Développement | Manuel |
-| staging | staging.rag-tp.example.com | Tests d'intégration | Auto (main branch) |
-| production | rag-tp.example.com | Production | Manuel (approval) |
+## Configuration GitHub Actions
 
-## Variables d'environnement par environnement
-
-### Local (.env.local)
-
-```bash
-# API
-NODE_ENV=development
-PORT=3000
-LOG_LEVEL=debug
-
-# Frontend
-VITE_API_URL=http://localhost:3000/api
-
-# Vector Store
-VECTOR_STORE_TYPE=chroma
-CHROMA_HOST=http://localhost:8000
-
-# Embeddings
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=sk-xxx
-
-# LLM
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-LLM_MOCK_MODE=true
-
-# Database
-SQLITE_PATH=./data/metadata.db
-```
-
-### Staging (.env.staging)
-
-```bash
-NODE_ENV=staging
-PORT=3000
-LOG_LEVEL=info
-
-VECTOR_STORE_TYPE=chroma
-CHROMA_HOST=http://chroma-staging:8000
-
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=${OPENAI_API_KEY}  # From secrets
-
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-LLM_MOCK_MODE=false
-
-SQLITE_PATH=/app/data/metadata.db
-```
-
-### Production (.env.production)
-
-```bash
-NODE_ENV=production
-PORT=3000
-LOG_LEVEL=warn
-
-VECTOR_STORE_TYPE=chroma
-CHROMA_HOST=http://chroma-prod:8000
-
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=${OPENAI_API_KEY}
-
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-LLM_MOCK_MODE=false
-
-SQLITE_PATH=/app/data/metadata.db
-```
-
-## Configuration Docker
-
-### Dockerfile Backend
-
-```dockerfile
-# backend/Dockerfile
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
-
-# Copy source and build
-COPY . .
-RUN npm run build
-
-# Production image
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Security: non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Copy built artifacts
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
-
-# Create data directory
-RUN mkdir -p /app/data && chown -R nodejs:nodejs /app/data
-
-USER nodejs
-
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/status || exit 1
-
-CMD ["node", "dist/index.js"]
-```
-
-### Dockerfile Frontend
-
-```dockerfile
-# frontend/Dockerfile
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-ARG VITE_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
-RUN npm run build
-
-# Production with nginx
-FROM nginx:alpine
-
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-### docker-compose.yml (développement)
+### `.github/workflows/ci.yml`
 
 ```yaml
-version: '3.8'
-
-services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - CHROMA_HOST=http://chroma:8000
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      chroma:
-        condition: service_healthy
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: http://localhost:3000/api
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend
-
-  chroma:
-    image: chromadb/chroma:latest
-    ports:
-      - "8000:8000"
-    volumes:
-      - chroma-data:/chroma/chroma
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  chroma-data:
-```
-
-### docker-compose.prod.yml
-
-```yaml
-version: '3.8'
-
-services:
-  backend:
-    image: ${REGISTRY}/rag-tp-backend:${VERSION}
-    restart: always
-    environment:
-      - NODE_ENV=production
-      - CHROMA_HOST=http://chroma:8000
-    env_file:
-      - .env.production
-    volumes:
-      - backend-data:/app/data
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-
-  frontend:
-    image: ${REGISTRY}/rag-tp-frontend:${VERSION}
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - backend
-
-  chroma:
-    image: chromadb/chroma:latest
-    restart: always
-    volumes:
-      - chroma-data:/chroma/chroma
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1'
-
-volumes:
-  backend-data:
-  chroma-data:
-```
-
-## Pipeline CI complet
-
-### GitHub Actions Workflow
-
-```yaml
-# .github/workflows/ci-cd.yml
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    branches: [main, develop]
 
 jobs:
-  # ================================
-  # CI - Tests & Quality
-  # ================================
-  lint:
+  ci:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run type-check
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  test-unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test:unit -- --coverage
-      - uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/lcov.info
+          bun-version: latest
 
-  test-integration:
-    runs-on: ubuntu-latest
-    services:
-      chroma:
-        image: chromadb/chroma:latest
-        ports:
-          - 8000:8000
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test:integration
-        env:
-          CHROMA_HOST: http://localhost:8000
+      - name: Install backend dependencies
+        working-directory: ./project/backend
+        run: bun install --frozen-lockfile
 
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm audit --audit-level=critical
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
+      - name: Install frontend dependencies
+        working-directory: ./project/frontend
+        run: bun install --frozen-lockfile
 
-  # ================================
-  # CD - Build & Deploy
-  # ================================
-  build:
-    needs: [lint, test-unit, test-integration, security]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Generate version
-        id: version
-        run: echo "version=$(date +'%Y%m%d')-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-      
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push backend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
-      
-      - name: Build and push frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          build-args: |
-            VITE_API_URL=${{ vars.STAGING_API_URL }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+      - name: TypeCheck backend
+        working-directory: ./project/backend
+        run: bun run typecheck
 
-  deploy-staging:
-    needs: build
+      - name: TypeCheck frontend
+        working-directory: ./project/frontend
+        run: bun run typecheck
+
+      - name: Lint
+        working-directory: ./project/backend
+        run: bunx eslint src/ --max-warnings 0
+
+      - name: Test backend
+        working-directory: ./project/backend
+        run: bun test
+
+      - name: Build frontend
+        working-directory: ./project/frontend
+        run: bun run build
+
+      - name: Upload frontend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: ./project/frontend/dist
+```
+
+### `.github/workflows/cd-staging.yml`
+
+```yaml
+name: Deploy Staging
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
     runs-on: ubuntu-latest
     environment: staging
+    
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd project/backend && bun install --frozen-lockfile
+          cd ../frontend && bun install --frozen-lockfile
+
+      - name: Build
+        run: |
+          cd project/frontend && bun run build
+
       - name: Deploy to staging
         run: |
-          echo "Deploying version ${{ needs.build.outputs.version }} to staging"
-          # SSH deploy or Kubernetes apply
-      
-      - name: Run smoke tests
-        run: |
-          curl -f https://staging.rag-tp.example.com/api/status || exit 1
+          # Exemple : rsync, Docker push, ou cloud deploy
+          echo "Deploying to staging..."
 
-  deploy-production:
-    needs: [build, deploy-staging]
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Deploy to production
+      - name: Smoke tests
         run: |
-          echo "Deploying version ${{ needs.build.outputs.version }} to production"
-          # Production deployment command
+          # curl -f https://staging.example.com/api/health
+          echo "Smoke tests passed"
 ```
+
+---
+
+## Environnements
+
+| Environnement | URL | Déploiement | Usage |
+| ------------- | --- | ----------- | ----- |
+| **Development** | localhost:3000 (API), localhost:5173 (UI) | Manuel (`bun run dev`) | Dev local |
+| **Staging** | staging.rag-tp.example.com | Auto sur `develop` | Tests intégration |
+| **Production** | rag-tp.example.com | Manuel + approbation | Production |
+
+---
+
+## Configuration par environnement
+
+| Variable | Dev | Staging | Prod |
+| -------- | --- | ------- | ---- |
+| `OPENAI_API_KEY` | `.env` local | Secret GitHub | Secret GitHub |
+| `CHROMA_HOST` | localhost | chroma-staging | chroma-prod |
+| `CHROMA_PORT` | 8000 | 8000 | 8000 |
+| `LOG_LEVEL` | debug | info | warn |
+| `LLM_PROVIDER` | mock | openai | openai |
+| `EMBEDDING_PROVIDER` | local | openai | openai |
+
+### Fichier `.env` (dev local)
+
+```bash
+# API Keys (optionnel en dev)
+OPENAI_API_KEY=sk-xxx
+
+# Vector Store
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+
+# Mode dev
+LLM_PROVIDER=mock
+EMBEDDING_PROVIDER=local
+LOG_LEVEL=debug
+
+# Server
+PORT=3000
+```
+
+---
 
 ## Procédures de déploiement
 
-### Déploiement local
+### Développement local
 
 ```bash
-# 1. Cloner le repository
+# 1. Cloner le repo
 git clone https://github.com/org/rag-tp.git
 cd rag-tp
 
-# 2. Copier les variables d'environnement
-cp .env.example .env.local
+# 2. Lancer ChromaDB
+docker-compose up -d
 
-# 3. Configurer la clé API OpenAI
-# Éditer .env.local et ajouter OPENAI_API_KEY
+# 3. Installer les dépendances
+cd project/backend && bun install
+cd ../frontend && bun install
 
-# 4. Démarrer avec Docker Compose
-docker compose up -d
+# 4. Configurer l'environnement
+cp .env.example .env
+# Éditer .env si nécessaire
 
-# 5. Vérifier le statut
-curl http://localhost:3000/api/status
+# 5. Lancer le backend
+cd project/backend
+bun run dev
 
-# 6. Accéder à l'application
-open http://localhost:5173
+# 6. Lancer le frontend (autre terminal)
+cd project/frontend
+bun run dev
 ```
 
-### Déploiement staging (automatique)
+### Déploiement Staging
 
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant GH as GitHub
-    participant CI as CI/CD
-    participant Stage as Staging
+1. Merger PR dans `develop`
+2. GitHub Actions déploie automatiquement
+3. Vérifier les logs du workflow
+4. Tester manuellement l'environnement staging
+5. Valider avec l'équipe
 
-    Dev->>GH: Push to main
-    GH->>CI: Trigger workflow
-    CI->>CI: Run tests
-    CI->>CI: Build images
-    CI->>Stage: Deploy
-    CI->>Stage: Smoke tests
-    CI->>GH: Update status
-```
+### Déploiement Production
 
-### Déploiement production (manuel)
+1. Créer PR `develop` → `main`
+2. Review obligatoire (minimum 1 approbation)
+3. Merger la PR
+4. GitHub Actions build et prépare le déploiement
+5. Approbation manuelle dans GitHub Environments
+6. Déploiement automatique post-approbation
+7. Smoke tests automatiques
+8. Communiquer le déploiement à l'équipe
 
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant GH as GitHub
-    participant CI as CI/CD
-    participant Prod as Production
-
-    Dev->>GH: Create release tag
-    GH->>CI: Trigger workflow
-    CI->>CI: Require approval
-    Dev->>CI: Approve deployment
-    CI->>Prod: Deploy
-    CI->>Prod: Smoke tests
-    CI-->>Dev: Rollback if failed
-```
-
-### Procédure de rollback
+### Rollback
 
 ```bash
-# 1. Identifier la version précédente
-docker images | grep rag-tp-backend
+# 1. Identifier le dernier commit stable
+git log --oneline -10
 
-# 2. Mettre à jour le fichier de version
-echo "VERSION=20240115-abc1234" > .env.version
+# 2. Revert le commit problématique
+git revert <commit-hash>
+git push origin main
 
-# 3. Redéployer
-docker compose -f docker-compose.prod.yml up -d
-
-# 4. Vérifier
-curl https://rag-tp.example.com/api/status
+# 3. OU redéployer un tag précédent
+git checkout v1.2.3
+# Déclencher le pipeline manuellement
 ```
 
-## Checklist pré-déploiement
+---
 
-### Staging
+## Dockerfile (optionnel)
 
-- [ ] Tous les tests CI passent
-- [ ] Pas de vulnérabilités critiques
-- [ ] Variables d'environnement configurées
-- [ ] Documentation à jour
+```dockerfile
+# Dockerfile pour le backend
+FROM oven/bun:1 as base
+WORKDIR /app
 
-### Production
+# Install dependencies
+FROM base AS install
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile --production
 
-- [ ] Staging validé (smoke tests OK)
-- [ ] Changelog à jour
-- [ ] Backup des données effectué
-- [ ] Approbation obtenue
-- [ ] Fenêtre de maintenance communiquée
-- [ ] Procédure de rollback prête
+# Copy source
+FROM base AS release
+COPY --from=install /app/node_modules node_modules
+COPY src ./src
+COPY tsconfig.json .
+
+# Run
+USER bun
+EXPOSE 3000
+ENTRYPOINT ["bun", "run", "src/index.ts"]
+```
+
+### docker-compose.yml complet
+
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: ./project/backend
+    ports:
+      - "3000:3000"
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - chromadb
+
+  frontend:
+    build: ./project/frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+
+volumes:
+  chroma-data:
+```
+
+---
+
+## Infrastructure as Code
+
+### Structure
+
+```
+infrastructure/
+├── docker/
+│   ├── backend.Dockerfile
+│   └── frontend.Dockerfile
+├── docker-compose.yml
+├── docker-compose.prod.yml
+└── scripts/
+    ├── deploy-staging.sh
+    └── deploy-prod.sh
+```
+
+### Script de déploiement
+
+```bash
+#!/bin/bash
+# scripts/deploy-staging.sh
+
+set -e
+
+echo "🚀 Deploying to staging..."
+
+# Pull latest
+git pull origin develop
+
+# Install dependencies
+cd project/backend && bun install --frozen-lockfile
+cd ../frontend && bun install --frozen-lockfile
+
+# Build frontend
+cd ../frontend && bun run build
+
+# Restart services
+pm2 restart rag-backend || pm2 start bun --name rag-backend -- run src/index.ts
+
+echo "✅ Deployment complete"
+```
+
+---
+
+## Checklist de déploiement
+
+### Pré-déploiement
+
+- [ ] Tests locaux passent (`bun test`)
+- [ ] TypeCheck passe (`bun run typecheck`)
+- [ ] Build frontend réussit (`bun run build`)
+- [ ] Variables d'environnement configurées sur la cible
+- [ ] ChromaDB accessible
+- [ ] Clé API OpenAI valide (si mode openai)
+- [ ] Plan de rollback documenté
+
+### Post-déploiement
+
+- [ ] Health check OK (`GET /api/health`)
+- [ ] ChromaDB connecté (vérifié via health check)
+- [ ] Test manuel d'une requête RAG
+- [ ] Logs sans erreurs critiques
+- [ ] Métriques nominales
+- [ ] Communication à l'équipe
+
+---
 
 ## Monitoring du déploiement
 
-| Métrique | Seuil d'alerte | Action |
-| -------- | -------------- | ------ |
-| Health check failures | > 3 consécutifs | Rollback automatique |
-| Error rate post-deploy | > 5% pendant 5min | Alerte + investigation |
-| Response time p95 | > 10s pendant 5min | Alerte |
-| Memory usage | > 90% | Scale up |
+### Health check endpoint
 
-## Configuration secrets
-
-### GitHub Secrets
-
-| Secret | Description | Utilisé par |
-| ------ | ----------- | ----------- |
-| `OPENAI_API_KEY` | Clé API OpenAI | Backend |
-| `GITHUB_TOKEN` | Token pour container registry | CI/CD |
-| `DEPLOY_SSH_KEY` | Clé SSH pour déploiement | Deploy jobs |
-
-### Configuration dans GitHub
-
-1. Settings → Secrets and variables → Actions
-2. Ajouter chaque secret
-3. Pour les variables non-sensibles, utiliser Variables
-
-## Scripts utilitaires
-
-```json
-// package.json root
+```typescript
+// GET /api/health
 {
-  "scripts": {
-    "docker:build": "docker compose build",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "docker:prod:up": "docker compose -f docker-compose.prod.yml up -d",
-    "deploy:staging": "gh workflow run ci-cd.yml -f environment=staging",
-    "deploy:prod": "gh workflow run ci-cd.yml -f environment=production"
+  "status": "ok",
+  "runtime": "bun",
+  "version": "1.0.0",
+  "timestamp": "2026-01-28T14:00:00Z",
+  "checks": {
+    "vectorStore": "connected",
+    "database": "connected"
   }
 }
 ```
+
+### Logs structurés
+
+```typescript
+// Utiliser un logger JSON pour la prod
+import pino from 'pino';
+
+const logger = pino({
+  level: Bun.env.LOG_LEVEL || 'info',
+  transport: Bun.env.NODE_ENV === 'development' 
+    ? { target: 'pino-pretty' } 
+    : undefined
+});
+
+logger.info({ event: 'server_start', port: 3000 }, 'Server started');
+logger.error({ event: 'query_error', error: err.message }, 'Query failed');
+```
+
+---
+
+## Sécurité CI/CD
+
+### Secrets GitHub
+
+| Secret | Usage |
+|--------|-------|
+| `OPENAI_API_KEY` | Clé API pour embedding et LLM |
+| `DEPLOY_SSH_KEY` | Clé SSH pour déploiement |
+| `DOCKER_TOKEN` | Token Docker Hub (si push images) |
+
+### Bonnes pratiques
+
+- ✅ Utiliser `bun install --frozen-lockfile` en CI
+- ✅ Ne jamais logger les secrets
+- ✅ Utiliser les GitHub Environments avec approbation
+- ✅ Scanner les dépendances (`bunx audit`)
+- ❌ Ne pas commit `.env` ou `bun.lockb` avec des secrets

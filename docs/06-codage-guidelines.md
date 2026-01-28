@@ -1,72 +1,80 @@
 # Guidelines de Développement
 
+## Stack technique
+
+Ce projet utilise **Bun** comme runtime JavaScript/TypeScript (clarification 004). Toutes les commandes `npm` sont remplacées par leurs équivalents `bun`.
+
+---
+
 ## Structure du projet
 
 ```
-rag-tp/
-├── frontend/                    # Application React
-│   ├── src/
-│   │   ├── components/          # Composants React
-│   │   │   ├── common/          # Composants réutilisables
-│   │   │   └── features/        # Composants par feature
-│   │   ├── hooks/               # Custom hooks
-│   │   ├── services/            # Appels API
-│   │   ├── types/               # Types TypeScript
-│   │   ├── utils/               # Utilitaires
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── tests/
+project/
+├── backend/
 │   ├── package.json
-│   └── tsconfig.json
-├── backend/                     # API Node.js/Express
-│   ├── src/
-│   │   ├── api/                 # Routes et controllers
-│   │   │   └── routes/
-│   │   ├── services/            # Logique métier
-│   │   │   ├── ingestion/
-│   │   │   ├── embedding/
-│   │   │   ├── search/
-│   │   │   └── generation/
-│   │   ├── repositories/        # Accès données
-│   │   ├── config/              # Configuration
-│   │   ├── types/               # Types partagés
-│   │   ├── utils/               # Utilitaires
-│   │   └── index.ts             # Point d'entrée
-│   ├── tests/
+│   ├── tsconfig.json
+│   ├── bun.lockb              # Lockfile Bun (binaire)
+│   └── src/
+│       ├── index.ts           # Point d'entrée
+│       ├── api/
+│       │   └── routes/
+│       ├── config/
+│       ├── services/
+│       │   ├── ingestion/
+│       │   ├── embedding/
+│       │   ├── search/
+│       │   └── generation/
+│       ├── repositories/
+│       ├── types/
+│       └── utils/
+├── frontend/
 │   ├── package.json
-│   └── tsconfig.json
-├── shared/                      # Types partagés front/back
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── index.html
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── components/
+│       ├── hooks/
+│       ├── services/
+│       └── types/
+├── shared/
 │   └── types/
-├── data/                        # Documents à indexer
-├── docs/                        # Documentation
-├── .env.example
-├── docker-compose.yml
-└── README.md
+├── data/
+│   └── documents/
+└── docker-compose.yml
 ```
+
+---
 
 ## Conventions de nommage
 
 | Élément | Convention | Exemple |
 |---------|------------|---------|
-| Fichiers TS/TSX | kebab-case | `query-input.tsx`, `embedding-service.ts` |
-| Composants React | PascalCase | `QueryInput`, `ResultDisplay` |
-| Hooks | camelCase avec `use` | `useQuery`, `useDebounce` |
-| Services/Classes | PascalCase | `EmbeddingService`, `VectorStore` |
-| Fonctions | camelCase | `embedText`, `searchSimilar` |
+| Fichiers TS/TSX | kebab-case | `query-input.tsx`, `vector-store.ts` |
+| Dossiers | kebab-case | `embedding/`, `api/` |
+| Classes | PascalCase | `VectorStore`, `EmbeddingService` |
+| Interfaces | PascalCase (préfixe I optionnel) | `QueryResult`, `IEmbedder` |
+| Types | PascalCase | `ChunkMetadata`, `SearchResponse` |
+| Fonctions | camelCase | `embedDocument`, `searchVectors` |
 | Constantes | SCREAMING_SNAKE_CASE | `MAX_CHUNK_SIZE`, `DEFAULT_TOP_K` |
-| Variables | camelCase | `currentQuery`, `searchResults` |
-| Types/Interfaces | PascalCase avec I (optionnel) | `SearchResult`, `IEmbedder` |
-| Enums | PascalCase | `ErrorCode`, `Status` |
-| Fichiers de test | `*.test.ts` ou `*.spec.ts` | `embedder.test.ts` |
+| Variables | camelCase | `embeddingVector`, `searchResults` |
+| Env vars | SCREAMING_SNAKE_CASE | `OPENAI_API_KEY`, `CHROMA_HOST` |
+| Composants React | PascalCase | `QueryInput`, `ResponseDisplay` |
+| Hooks React | camelCase, préfixe `use` | `useQuery`, `useDebounce` |
+
+---
 
 ## Standards de code
 
-### Principes fondamentaux
+### Principes
 
-- **SOLID** : Appliquer systématiquement, notamment Single Responsibility
-- **DRY** : Éviter la duplication, extraire les logiques communes
-- **KISS** : Préférer la simplicité, éviter la sur-ingénierie
-- **Composition over Inheritance** : Privilégier la composition
+- **SOLID** : Appliquer systématiquement, en particulier :
+  - **S**ingle Responsibility : Un service = une responsabilité
+  - **D**ependency Inversion : Injecter les dépendances via interfaces
+- **DRY** : Factoriser le code dupliqué dans `/utils` ou `/shared`
+- **KISS** : Préférer la simplicité — pas d'abstraction prématurée
 
 ### TypeScript strict
 
@@ -78,120 +86,126 @@ rag-tp/
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true
   }
 }
 ```
 
-### Configuration ESLint
+### Configuration ESLint recommandée
 
-```javascript
-// .eslintrc.js
-module.exports = {
-  extends: [
-    'eslint:recommended',
-    'plugin:@typescript-eslint/recommended',
-    'plugin:react/recommended',
-    'plugin:react-hooks/recommended',
-    'prettier'
+```json
+{
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended"
   ],
-  rules: {
-    '@typescript-eslint/explicit-function-return-type': 'warn',
-    '@typescript-eslint/no-explicit-any': 'error',
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
-    'prefer-const': 'error',
-    'no-var': 'error'
+  "rules": {
+    "@typescript-eslint/explicit-function-return-type": "warn",
+    "@typescript-eslint/no-unused-vars": "error",
+    "no-console": "warn",
+    "prefer-const": "error"
   }
-};
+}
 ```
 
-### Documentation du code
+---
+
+## Documentation du code
+
+### Fonctions et méthodes
 
 ```typescript
 /**
- * Génère les embeddings pour une liste de textes.
+ * Génère un embedding pour un texte donné.
  * 
- * @param texts - Liste de textes à vectoriser
- * @param options - Options de génération (batch size, modèle)
- * @returns Promise<number[][]> - Matrice de vecteurs
- * @throws EmbeddingError si le service est indisponible
+ * @param text - Le texte à vectoriser
+ * @param options - Options de configuration
+ * @returns Le vecteur d'embedding (1536 dimensions pour OpenAI)
+ * @throws {EmbeddingError} Si l'API échoue ou le texte est vide
  * 
  * @example
- * const embeddings = await embedBatch(['Hello', 'World'], { batchSize: 10 });
+ * const vector = await embedText("Hello world");
+ * console.log(vector.length); // 1536
  */
-async function embedBatch(
-  texts: string[],
+export async function embedText(
+  text: string,
   options?: EmbedOptions
-): Promise<number[][]> {
-  // implementation
+): Promise<number[]> {
+  // ...
 }
 ```
+
+### Interfaces et types
+
+```typescript
+/**
+ * Résultat d'une recherche vectorielle.
+ */
+export interface SearchResult {
+  /** Identifiant unique du chunk */
+  chunkId: string;
+  /** Texte du chunk trouvé */
+  text: string;
+  /** Score de similarité (0-1) */
+  score: number;
+  /** Métadonnées du document source */
+  metadata: ChunkMetadata;
+}
+```
+
+---
 
 ## Patterns recommandés
 
 | Pattern | Cas d'usage | Exemple |
 | ------- | ----------- | ------- |
+| **Factory** | Créer des instances de services selon config | `createEmbedder(config)` → OpenAI ou Local |
 | **Repository** | Abstraction accès données | `VectorStoreRepository`, `MetadataRepository` |
-| **Service** | Logique métier encapsulée | `EmbeddingService`, `SearchService` |
-| **Factory** | Création d'objets complexes | `createEmbedder(config)` |
-| **Dependency Injection** | Découplage des dépendances | Injection via constructeur |
-| **Strategy** | Algorithmes interchangeables | `Embedder` interface avec implémentations |
-| **Builder** | Construction d'objets step-by-step | `PromptBuilder` |
+| **Strategy** | Algorithmes interchangeables | `ChunkingStrategy` (fixed, semantic) |
+| **Builder** | Construction de prompts complexes | `PromptBuilder.withContext().withSources()` |
+| **Singleton** | Config globale, connexions DB | `config`, `db` (via modules ES) |
 
-### Exemple : Pattern Repository
+### Exemple : Pattern Factory pour Embedder
 
 ```typescript
-// repositories/vector-store.ts
-export interface VectorStoreRepository {
-  add(id: string, vector: number[], metadata: Metadata): Promise<void>;
-  search(vector: number[], topK: number): Promise<SearchResult[]>;
-  delete(id: string): Promise<void>;
+// services/embedding/index.ts
+import { config } from '../../config';
+import { OpenAIEmbedder } from './openai';
+import { LocalEmbedder } from './local';
+
+export interface Embedder {
+  embed(text: string): Promise<number[]>;
+  embedBatch(texts: string[]): Promise<number[][]>;
 }
 
-export class ChromaVectorStore implements VectorStoreRepository {
-  constructor(private client: ChromaClient) {}
-  
-  async add(id: string, vector: number[], metadata: Metadata): Promise<void> {
-    await this.client.add({ ids: [id], embeddings: [vector], metadatas: [metadata] });
-  }
-  
-  async search(vector: number[], topK: number): Promise<SearchResult[]> {
-    const results = await this.client.query({ queryEmbeddings: [vector], nResults: topK });
-    return this.mapToSearchResults(results);
+export function createEmbedder(): Embedder {
+  switch (config.embeddingProvider) {
+    case 'openai':
+      return new OpenAIEmbedder(config.openaiApiKey);
+    case 'local':
+      return new LocalEmbedder();
+    default:
+      throw new Error(`Unknown embedding provider: ${config.embeddingProvider}`);
   }
 }
 ```
 
-### Exemple : Pattern Service
-
-```typescript
-// services/search/searcher.ts
-export class SearchService {
-  constructor(
-    private embedder: Embedder,
-    private vectorStore: VectorStoreRepository,
-    private metadataStore: MetadataRepository
-  ) {}
-
-  async search(query: string, options: SearchOptions): Promise<SearchResult[]> {
-    const embedding = await this.embedder.embed(query);
-    const vectorResults = await this.vectorStore.search(embedding, options.topK);
-    return this.enrichWithMetadata(vectorResults);
-  }
-}
-```
+---
 
 ## Anti-patterns à éviter
 
 | Anti-pattern | Problème | Alternative |
 | ------------ | -------- | ----------- |
-| **God Class** | Classe avec trop de responsabilités | Découper en services spécialisés |
-| **any** | Perte du typage | Types explicites ou `unknown` |
-| **Callback Hell** | Code illisible | async/await |
-| **Magic Numbers** | Valeurs non explicites | Constantes nommées |
-| **Tight Coupling** | Difficile à tester/modifier | Injection de dépendances |
-| **Premature Optimization** | Complexité inutile | Optimiser sur mesure |
-| **Copy-Paste** | Duplication | Extraction en fonction/module |
+| **God Object** | Service qui fait tout | Découper en services spécialisés |
+| **Hardcoded config** | Valeurs en dur | Utiliser `Bun.env` + `config.ts` |
+| **any everywhere** | Perte du typage | Types explicites, génériques |
+| **Callback hell** | Code illisible | async/await, Promises |
+| **Console.log partout** | Logs non structurés | Logger dédié (pino, winston) |
+| **Imports circulaires** | Erreurs runtime | Réorganiser les modules, barrel files |
+| **Mutable state** | Bugs difficiles | `const`, immutabilité, `readonly` |
+
+---
 
 ## Gestion des erreurs
 
@@ -202,186 +216,252 @@ export class SearchService {
 export class AppError extends Error {
   constructor(
     message: string,
-    public code: ErrorCode,
-    public statusCode: number = 500,
-    public isOperational: boolean = true
+    public readonly code: string,
+    public readonly statusCode: number = 500
   ) {
     super(message);
     this.name = this.constructor.name;
-    Error.captureStackTrace(this, this.constructor);
   }
 }
 
 export class ValidationError extends AppError {
   constructor(message: string) {
-    super(message, ErrorCode.VALIDATION_ERROR, 400);
+    super(message, 'VALIDATION_ERROR', 400);
   }
 }
 
 export class EmbeddingError extends AppError {
   constructor(message: string) {
-    super(message, ErrorCode.EMBEDDING_ERROR, 503);
+    super(message, 'EMBEDDING_ERROR', 502);
+  }
+}
+
+export class VectorStoreError extends AppError {
+  constructor(message: string) {
+    super(message, 'VECTOR_STORE_ERROR', 503);
   }
 }
 
 export class LLMError extends AppError {
   constructor(message: string) {
-    super(message, ErrorCode.LLM_ERROR, 503);
-  }
-}
-
-export enum ErrorCode {
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  EMBEDDING_ERROR = 'EMBEDDING_ERROR',
-  LLM_ERROR = 'LLM_ERROR',
-  VECTOR_STORE_ERROR = 'VECTOR_STORE_ERROR',
-  NOT_FOUND = 'NOT_FOUND',
-  INTERNAL_ERROR = 'INTERNAL_ERROR'
-}
-```
-
-### Format des messages d'erreur
-
-```typescript
-// Réponse API erreur
-{
-  "success": false,
-  "error": {
-    "code": "EMBEDDING_ERROR",
-    "message": "Failed to generate embeddings",
-    "details": "OpenAI API rate limit exceeded",
-    "timestamp": "2026-01-28T12:00:00Z"
+    super(message, 'LLM_ERROR', 502);
   }
 }
 ```
 
-### Error handler Express
+### Middleware Express pour les erreurs
 
 ```typescript
 // api/middleware/error-handler.ts
-export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
-  logger.error({ err, path: req.path, method: req.method });
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../../types/errors';
 
+export function errorHandler(
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      success: false,
-      error: {
-        code: err.code,
-        message: err.message,
-        timestamp: new Date().toISOString()
-      }
+    res.status(err.statusCode).json({
+      error: err.code,
+      message: err.message,
     });
+    return;
   }
 
-  return res.status(500).json({
-    success: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: 'An unexpected error occurred',
-      timestamp: new Date().toISOString()
-    }
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'INTERNAL_ERROR',
+    message: 'An unexpected error occurred',
   });
-};
+}
 ```
+
+---
+
+## Commandes Bun
+
+### Équivalences npm → Bun
+
+| Action | npm | Bun |
+|--------|-----|-----|
+| Installer dépendances | `npm install` | `bun install` |
+| Ajouter une dépendance | `npm install <pkg>` | `bun add <pkg>` |
+| Ajouter une devDep | `npm install -D <pkg>` | `bun add -d <pkg>` |
+| Supprimer une dépendance | `npm uninstall <pkg>` | `bun remove <pkg>` |
+| Exécuter un script | `npm run <script>` | `bun run <script>` |
+| Exécuter un fichier | `node file.js` | `bun file.ts` |
+| Lancer les tests | `npm test` | `bun test` |
+| Exécuter npx | `npx <cmd>` | `bunx <cmd>` |
+
+### Scripts package.json (backend)
+
+```json
+{
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "bunx eslint src/",
+    "format": "bunx prettier --write src/"
+  }
+}
+```
+
+### Scripts package.json (frontend)
+
+```json
+{
+  "scripts": {
+    "dev": "bunx --bun vite",
+    "build": "bunx --bun vite build",
+    "preview": "bunx --bun vite preview",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+---
 
 ## Git workflow
 
 ### Branches
 
 | Type | Format | Exemple |
-| ------- | ------------------------------ | --------------------------- |
-| Feature | `feature/[US-ID]-description` | `feature/US-001-ingestion-api` |
-| Bugfix | `fix/[BUG-ID]-description` | `fix/BUG-042-null-embedding` |
-| Hotfix | `hotfix/[ID]-description` | `hotfix/001-api-crash` |
-| Release | `release/vX.Y.Z` | `release/v1.0.0` |
+| ---- | ------ | ------- |
+| Feature | `feature/[ticket]-description` | `feature/US-001-query-endpoint` |
+| Bugfix | `fix/[ticket]-description` | `fix/BUG-042-embedding-timeout` |
+| Refactor | `refactor/description` | `refactor/extract-embedder` |
+| Docs | `docs/description` | `docs/api-endpoints` |
 
 ### Commits (Conventional Commits)
 
 ```
-<type>(<scope>): <description>
+type(scope): description courte
 
-[optional body]
+[corps optionnel]
 
-[optional footer]
+[footer optionnel]
 ```
 
-| Type | Usage |
-|------|-------|
-| `feat` | Nouvelle fonctionnalité |
-| `fix` | Correction de bug |
-| `docs` | Documentation |
-| `style` | Formatage (pas de changement de code) |
-| `refactor` | Refactoring |
-| `test` | Ajout/modification de tests |
-| `chore` | Maintenance, dépendances |
+**Types** :
+- `feat` : Nouvelle fonctionnalité
+- `fix` : Correction de bug
+- `refactor` : Refactoring sans changement fonctionnel
+- `docs` : Documentation
+- `test` : Ajout/modification de tests
+- `chore` : Tâches de maintenance (deps, config)
 
-**Exemples :**
+**Exemples** :
 ```
-feat(ingestion): add chunking with configurable overlap
+feat(api): add /api/query endpoint
+
+Implements the main RAG query flow with vector search
+and LLM generation.
+
+Closes #12
+```
+
+```
 fix(embedding): handle empty text input
-docs(api): add query endpoint documentation
-refactor(search): extract vector search to repository
-test(generation): add prompt builder unit tests
+
+Return empty vector instead of throwing for empty strings.
 ```
 
 ### Pull Requests
 
-**Template PR :**
+**Template PR** :
+
 ```markdown
 ## Description
 <!-- Décrivez les changements -->
 
 ## Type de changement
-- [ ] Feature
-- [ ] Bug fix
+- [ ] Nouvelle fonctionnalité
+- [ ] Correction de bug
 - [ ] Refactoring
 - [ ] Documentation
 
 ## Checklist
-- [ ] Tests ajoutés/mis à jour
+- [ ] Tests ajoutés/modifiés
+- [ ] TypeScript compile sans erreur
+- [ ] Lint passe
 - [ ] Documentation mise à jour
-- [ ] Lint/format OK
-- [ ] Review demandée
 
-## Screenshots (si UI)
-
-## Related Issues
-Closes #XXX
+## Tests effectués
+<!-- Décrivez comment vous avez testé -->
 ```
 
-**Règles :**
-- Minimum 1 reviewer requis
-- CI doit passer (tests + lint)
+**Règles** :
+- Minimum 1 reviewer
+- CI verte requise (`bun test`, `tsc --noEmit`)
 - Squash merge recommandé
-- Description claire et concise
 
-## Logging
+---
 
-### Configuration Pino
+## Bonnes pratiques Bun
+
+### Utiliser les APIs natives Bun
 
 ```typescript
-// config/logger.ts
-import pino from 'pino';
+// ❌ Éviter (dépendance npm)
+import dotenv from 'dotenv';
+dotenv.config();
+const apiKey = process.env.OPENAI_API_KEY;
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  transport: process.env.NODE_ENV === 'development' 
-    ? { target: 'pino-pretty' } 
-    : undefined,
-  base: { service: 'rag-api' },
-  timestamp: pino.stdTimeFunctions.isoTime
+// ✅ Préférer (natif Bun)
+const apiKey = Bun.env.OPENAI_API_KEY;
+```
+
+```typescript
+// ❌ Éviter (dépendance npm pour SQLite)
+import Database from 'better-sqlite3';
+
+// ✅ Préférer (natif Bun)
+import { Database } from 'bun:sqlite';
+```
+
+```typescript
+// ❌ Éviter (fs Node.js)
+import { readFile } from 'fs/promises';
+const content = await readFile('file.txt', 'utf-8');
+
+// ✅ Préférer (natif Bun)
+const file = Bun.file('file.txt');
+const content = await file.text();
+```
+
+### Tests avec Bun
+
+```typescript
+// __tests__/embedding.test.ts
+import { describe, it, expect, mock } from 'bun:test';
+import { embedText } from '../src/services/embedding';
+
+describe('embedText', () => {
+  it('should return a vector of correct dimension', async () => {
+    const result = await embedText('test');
+    expect(result).toBeArray();
+    expect(result.length).toBe(1536);
+  });
+
+  it('should throw for empty input', async () => {
+    expect(embedText('')).rejects.toThrow();
+  });
 });
 ```
 
-### Bonnes pratiques de logging
+---
 
-```typescript
-// Contexte structuré
-logger.info({ documentId, chunkCount }, 'Document ingested successfully');
+## Checklist avant commit
 
-// Erreurs avec stack
-logger.error({ err, query }, 'Search failed');
-
-// Durées et métriques
-logger.info({ duration: endTime - startTime, topK }, 'Search completed');
-```
+- [ ] `bun run typecheck` passe sans erreur
+- [ ] `bun test` passe
+- [ ] `bunx eslint src/` ne retourne pas d'erreur
+- [ ] Pas de `console.log` de debug oublié
+- [ ] Pas de `any` non justifié
+- [ ] Documentation à jour si API modifiée
+- [ ] Variables d'environnement documentées si ajoutées

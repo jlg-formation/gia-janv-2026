@@ -4,109 +4,123 @@
 
 | Couche | Technologie | Version | Justification |
 |--------|-------------|---------|---------------|
-| Frontend | React + TypeScript | React 18.x | Demandé par clarification, composants réactifs |
-| Frontend Build | Vite | 5.x | Build rapide, HMR, ESM natif |
-| Backend | Node.js + Express | Node 20.x, Express 4.x | Simplicité, écosystème mature |
-| Base vectorielle | ChromaDB ou Qdrant | Latest | API REST, client JS disponible |
-| Métadonnées | SQLite | 3.x | Léger, embarqué, requêtes SQL |
-| Embeddings | OpenAI API / Transformers.js | - | Qualité + option locale |
-| LLM | OpenAI GPT-4o-mini | - | Qualité, SDK mature |
-| Validation | Zod | 3.x | Validation runtime typée |
-| Logs | Pino | 8.x | Logs structurés JSON |
+| **Runtime** | Bun | 1.x+ | Clarification 004 : remplace Node.js/npm |
+| **Langage** | TypeScript | 5.x | Clarification 002 : typage statique, support natif Bun |
+| **Frontend** | React + Vite | React 18.x, Vite 5.x | Clarification 002 : SPA moderne, HMR rapide |
+| **Backend** | Express.js | 4.x | Clarification 004 : via compatibilité Bun |
+| **Base vectorielle** | ChromaDB / Qdrant | Latest | Recherche par similarité |
+| **Métadonnées** | SQLite | Via bun:sqlite | API native Bun, performant |
+| **Embedding** | OpenAI / Transformers.js | - | Qualité + option offline |
+| **LLM** | OpenAI GPT-4o-mini | - | Génération de réponses |
+| **Validation** | Zod | 3.x | Schémas TypeScript-first |
+| **Tests** | Bun test | Intégré | Test runner natif Bun |
+
+---
 
 ## Architecture technique (OBLIGATOIRE)
 
 ```mermaid
 graph TB
-    subgraph "Client Browser"
+    subgraph "Client"
+        Browser[Navigateur]
+    end
+    subgraph "Frontend - Vite + React"
+        VITE[Vite Dev Server]
         REACT[React App]
     end
-    subgraph "Backend Node.js"
-        EXPRESS[Express Server]
+    subgraph "Backend - Bun + Express"
+        API[Express API :3000]
         subgraph "Services"
             INGEST[Ingestion]
             EMBED[Embedding]
             SEARCH[Search]
             GEN[Generation]
         end
-        subgraph "Repositories"
-            VECREPO[Vector Repository]
-            METAREPO[Metadata Repository]
-        end
     end
-    subgraph "Data"
-        CHROMA[(ChromaDB)]
-        SQLITE[(SQLite)]
+    subgraph "Data Layer"
+        SQLITE[(bun:sqlite)]
+        CHROMA[(ChromaDB :8000)]
     end
     subgraph "External APIs"
         OPENAI[OpenAI API]
     end
 
-    REACT -->|HTTP| EXPRESS
-    EXPRESS --> INGEST --> EMBED
-    EMBED --> VECREPO --> CHROMA
-    EMBED --> METAREPO --> SQLITE
-    EXPRESS --> SEARCH --> VECREPO
+    Browser --> VITE --> REACT
+    REACT --> API
+    API --> INGEST --> EMBED
+    EMBED --> CHROMA
+    EMBED --> SQLITE
+    API --> SEARCH --> CHROMA
     SEARCH --> GEN --> OPENAI
-    GEN --> EXPRESS --> REACT
+    GEN --> API
 ```
+
+---
 
 ## Structure du projet
 
 ```
-rag-tp/
+project/
+├── backend/
+│   ├── package.json           # Dépendances backend
+│   ├── tsconfig.json          # Config TypeScript
+│   ├── bun.lockb              # Lockfile Bun
+│   └── src/
+│       ├── index.ts           # Point d'entrée Express
+│       ├── api/
+│       │   └── routes/        # Routes REST
+│       │       ├── health.ts
+│       │       ├── ingest.ts
+│       │       └── query.ts
+│       ├── config/
+│       │   └── index.ts       # Configuration centralisée
+│       ├── services/
+│       │   ├── ingestion/
+│       │   │   ├── loader.ts      # Chargement documents
+│       │   │   └── chunker.ts     # Découpage en chunks
+│       │   ├── embedding/
+│       │   │   ├── index.ts       # Interface embedding
+│       │   │   ├── openai.ts      # Implémentation OpenAI
+│       │   │   └── local.ts       # Implémentation Transformers.js
+│       │   ├── search/
+│       │   │   └── vector-search.ts
+│       │   └── generation/
+│       │       ├── prompt-builder.ts
+│       │       └── llm.ts
+│       ├── repositories/
+│       │   ├── vector-store.ts    # Interface ChromaDB
+│       │   └── metadata-store.ts  # Interface SQLite
+│       ├── types/
+│       │   └── index.ts           # Types partagés
+│       └── utils/
+│           └── logger.ts
 ├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── QueryInput.tsx
-│   │   │   ├── ResultDisplay.tsx
-│   │   │   └── SourceList.tsx
-│   │   ├── hooks/
-│   │   │   └── useQuery.ts
-│   │   ├── services/
-│   │   │   └── api.ts
-│   │   ├── types/
-│   │   │   └── index.ts
-│   │   ├── App.tsx
-│   │   └── main.tsx
 │   ├── package.json
 │   ├── tsconfig.json
-│   └── vite.config.ts
-├── backend/
-│   ├── src/
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── ingest.ts
-│   │   │   │   └── query.ts
-│   │   │   └── index.ts
-│   │   ├── services/
-│   │   │   ├── ingestion/
-│   │   │   │   ├── loader.ts
-│   │   │   │   └── chunker.ts
-│   │   │   ├── embedding/
-│   │   │   │   ├── embedder.ts
-│   │   │   │   └── openai-embedder.ts
-│   │   │   ├── search/
-│   │   │   │   └── searcher.ts
-│   │   │   └── generation/
-│   │   │       ├── prompt-builder.ts
-│   │   │       └── llm-caller.ts
-│   │   ├── repositories/
-│   │   │   ├── vector-store.ts
-│   │   │   └── metadata-store.ts
-│   │   ├── config/
-│   │   │   └── index.ts
-│   │   ├── types/
-│   │   │   └── index.ts
-│   │   └── index.ts
-│   ├── package.json
-│   └── tsconfig.json
+│   ├── vite.config.ts
+│   ├── index.html
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── components/
+│       │   ├── QueryInput.tsx
+│       │   ├── ResponseDisplay.tsx
+│       │   └── SourceList.tsx
+│       ├── hooks/
+│       │   └── useQuery.ts
+│       ├── services/
+│       │   └── api.ts
+│       └── types/
+│           └── index.ts
+├── shared/
+│   └── types/
+│       └── index.ts           # Types partagés front/back
 ├── data/
-│   └── documents/
-├── .env.example
-├── docker-compose.yml
-└── README.md
+│   └── documents/             # Documents à indexer
+└── docker-compose.yml         # ChromaDB
 ```
+
+---
 
 ## Modèle de données
 
@@ -115,44 +129,46 @@ rag-tp/
 ```mermaid
 erDiagram
     DOCUMENT ||--o{ CHUNK : contains
-    CHUNK ||--|| EMBEDDING : has
     DOCUMENT {
         string id PK
         string filename
         string filepath
-        datetime ingested_at
-        int chunk_count
+        datetime indexed_at
     }
     CHUNK {
         string id PK
-        string document_id FK
+        string doc_id FK
         string text
         int position
-        int start_char
-        int end_char
+        int char_start
+        int char_end
     }
     EMBEDDING {
         string chunk_id PK
         float[] vector
-        datetime created_at
     }
+
+    CHUNK ||--|| EMBEDDING : has
 ```
 
 ### Dictionnaire de données
 
 | Entité | Champ | Type | Contraintes | Description |
 | ------ | ----- | ---- | ----------- | ----------- |
-| Document | id | string (UUID) | PK, NOT NULL | Identifiant unique du document |
-| Document | filename | string | NOT NULL | Nom du fichier original |
-| Document | filepath | string | NOT NULL | Chemin relatif du fichier |
-| Document | ingested_at | datetime | NOT NULL | Date d'ingestion |
-| Document | chunk_count | int | NOT NULL | Nombre de chunks générés |
-| Chunk | id | string (UUID) | PK, NOT NULL | Identifiant unique du chunk |
-| Chunk | document_id | string | FK, NOT NULL | Référence au document parent |
-| Chunk | text | string | NOT NULL | Contenu textuel du chunk |
-| Chunk | position | int | NOT NULL | Position du chunk dans le document |
-| Chunk | start_char | int | NOT NULL | Position de début dans le document |
-| Chunk | end_char | int | NOT NULL | Position de fin dans le document |
+| DOCUMENT | id | string | PK, UUID | Identifiant unique du document |
+| DOCUMENT | filename | string | NOT NULL | Nom du fichier |
+| DOCUMENT | filepath | string | NOT NULL | Chemin relatif |
+| DOCUMENT | indexed_at | datetime | NOT NULL | Date d'indexation |
+| CHUNK | id | string | PK, UUID | Identifiant unique du chunk |
+| CHUNK | doc_id | string | FK → DOCUMENT | Référence au document parent |
+| CHUNK | text | string | NOT NULL | Contenu textuel |
+| CHUNK | position | int | NOT NULL | Position dans le document (0-based) |
+| CHUNK | char_start | int | NOT NULL | Offset caractère début |
+| CHUNK | char_end | int | NOT NULL | Offset caractère fin |
+| EMBEDDING | chunk_id | string | PK, FK → CHUNK | Référence au chunk |
+| EMBEDDING | vector | float[] | NOT NULL | Vecteur d'embedding (1536 dim OpenAI) |
+
+---
 
 ## Spécifications API
 
@@ -160,234 +176,118 @@ erDiagram
 
 | Méthode | Endpoint | Description | Auth |
 | ------- | -------- | ----------- | ---- |
-| POST | /api/ingest | Ingère un dossier de documents | - |
-| GET | /api/status | Statut de l'index (nb docs, chunks) | - |
-| POST | /api/query | Exécute une requête RAG | - |
-| GET | /api/health | Health check | - |
+| GET | `/api/health` | Health check | Non |
+| POST | `/api/ingest` | Indexer un document | Non |
+| GET | `/api/documents` | Lister les documents indexés | Non |
+| DELETE | `/api/documents/:id` | Supprimer un document | Non |
+| POST | `/api/query` | Effectuer une requête RAG | Non |
 
 ### Contrats d'API
 
-#### `POST /api/ingest`
+#### `GET /api/health`
 
-**Description** : Ingère les documents d'un dossier, génère les chunks et embeddings.
-
-**Request** :
-
+**Response 200** :
 ```json
 {
-  "sourcePath": "./data/documents",
-  "options": {
-    "chunkSize": 500,
-    "chunkOverlap": 50,
-    "rebuild": false
-  }
+  "status": "ok",
+  "runtime": "bun",
+  "version": "1.0.0",
+  "vectorStore": "connected"
 }
 ```
 
-**Response 200** :
+#### `POST /api/ingest`
 
+**Request** :
+```json
+{
+  "filepath": "documents/example.txt"
+}
+```
+
+ou multipart/form-data avec fichier uploadé.
+
+**Response 200** :
 ```json
 {
   "success": true,
-  "stats": {
-    "documentsProcessed": 5,
-    "chunksCreated": 42,
-    "duration": 3500,
-    "errors": []
+  "document": {
+    "id": "uuid-xxx",
+    "filename": "example.txt",
+    "chunks": 12,
+    "indexed_at": "2026-01-28T10:00:00Z"
   }
 }
 ```
 
 **Response 400** :
-
 ```json
 {
-  "success": false,
-  "error": "Source path does not exist"
+  "error": "Invalid file format",
+  "details": "Only .txt and .md files are supported"
 }
 ```
-
----
 
 #### `POST /api/query`
 
-**Description** : Exécute une recherche sémantique et génère une réponse.
-
 **Request** :
-
 ```json
 {
   "question": "Comment fonctionne le RAG ?",
-  "options": {
-    "topK": 5,
-    "temperature": 0.2
-  }
+  "top_k": 5
 }
 ```
 
 **Response 200** :
-
 ```json
 {
-  "success": true,
-  "answer": "Le RAG (Retrieval-Augmented Generation) fonctionne en...",
+  "question": "Comment fonctionne le RAG ?",
+  "answer": "Le RAG (Retrieval-Augmented Generation) combine...",
   "sources": [
     {
-      "chunkId": "abc-123",
-      "documentId": "doc-456",
-      "filename": "rag-intro.md",
-      "text": "Le RAG combine la recherche de documents...",
-      "score": 0.89
+      "chunk_id": "uuid-chunk-1",
+      "document": "rag-intro.md",
+      "text": "Le RAG est une technique...",
+      "score": 0.92
+    },
+    {
+      "chunk_id": "uuid-chunk-2",
+      "document": "embeddings.md",
+      "text": "Les embeddings permettent...",
+      "score": 0.87
     }
   ],
   "metadata": {
-    "model": "gpt-4o-mini",
-    "topK": 5,
-    "duration": 1200
-  }
-}
-```
-
-**Response 400** :
-
-```json
-{
-  "success": false,
-  "error": "Index is empty. Please run ingestion first."
-}
-```
-
----
-
-#### `GET /api/status`
-
-**Description** : Retourne le statut de l'index.
-
-**Response 200** :
-
-```json
-{
-  "indexed": true,
-  "documentsCount": 5,
-  "chunksCount": 42,
-  "lastIngestion": "2026-01-28T10:00:00Z",
-  "config": {
-    "chunkSize": 500,
-    "chunkOverlap": 50,
-    "embeddingModel": "text-embedding-3-small"
+    "embedding_time_ms": 45,
+    "search_time_ms": 12,
+    "generation_time_ms": 890,
+    "total_time_ms": 947
   }
 }
 ```
 
 ---
-
-## Interfaces TypeScript
-
-### Types partagés
-
-```typescript
-// types/index.ts
-
-export interface Document {
-  id: string;
-  filename: string;
-  filepath: string;
-  ingestedAt: Date;
-  chunkCount: number;
-}
-
-export interface Chunk {
-  id: string;
-  documentId: string;
-  text: string;
-  position: number;
-  startChar: number;
-  endChar: number;
-}
-
-export interface SearchResult {
-  chunkId: string;
-  documentId: string;
-  filename: string;
-  text: string;
-  score: number;
-}
-
-export interface QueryResponse {
-  success: boolean;
-  answer: string;
-  sources: SearchResult[];
-  metadata: {
-    model: string;
-    topK: number;
-    duration: number;
-  };
-}
-
-export interface IngestOptions {
-  chunkSize: number;
-  chunkOverlap: number;
-  rebuild: boolean;
-}
-
-export interface QueryOptions {
-  topK: number;
-  temperature: number;
-}
-```
-
-### Interfaces de services
-
-```typescript
-// services/embedding/embedder.ts
-export interface Embedder {
-  embed(text: string): Promise<number[]>;
-  embedBatch(texts: string[]): Promise<number[][]>;
-}
-
-// services/search/searcher.ts
-export interface Searcher {
-  search(query: string, topK: number): Promise<SearchResult[]>;
-}
-
-// services/generation/llm-caller.ts
-export interface LLMCaller {
-  generate(prompt: string, options?: GenerateOptions): Promise<string>;
-}
-```
 
 ## Configuration
 
-### Variables d'environnement
+### Variables d'environnement (.env)
 
-| Variable | Description | Valeur par défaut | Requis |
-| -------- | ----------- | ----------------- | ------ |
-| `OPENAI_API_KEY` | Clé API OpenAI | - | Oui* |
-| `EMBEDDING_MODEL` | Modèle d'embedding | `text-embedding-3-small` | Non |
-| `LLM_MODEL` | Modèle LLM | `gpt-4o-mini` | Non |
-| `CHROMA_URL` | URL du serveur ChromaDB | `http://localhost:8000` | Non |
-| `CHUNK_SIZE` | Taille des chunks (caractères) | `500` | Non |
-| `CHUNK_OVERLAP` | Chevauchement des chunks | `50` | Non |
-| `TOP_K` | Nombre de résultats par défaut | `5` | Non |
-| `PORT` | Port du serveur Express | `3001` | Non |
-| `MOCK_MODE` | Mode mock (sans API) | `false` | Non |
-
-*Requis sauf si `MOCK_MODE=true`
-
-### Fichier .env.example
-
-```env
-# OpenAI
+```bash
+# API Keys
 OPENAI_API_KEY=sk-...
+
+# Vector Store
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+CHROMA_COLLECTION=rag-tp
 
 # Embedding
 EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_PROVIDER=openai  # openai | local
 
 # LLM
 LLM_MODEL=gpt-4o-mini
-
-# Vector Store
-CHROMA_URL=http://localhost:8000
+LLM_PROVIDER=openai  # openai | mock
 
 # Chunking
 CHUNK_SIZE=500
@@ -397,83 +297,137 @@ CHUNK_OVERLAP=50
 TOP_K=5
 
 # Server
-PORT=3001
-
-# Development
-MOCK_MODE=false
+PORT=3000
+LOG_LEVEL=info
 ```
+
+### Validation avec Zod (config/index.ts)
+
+```typescript
+import { z } from 'zod';
+
+const configSchema = z.object({
+  openaiApiKey: z.string().optional(),
+  chromaHost: z.string().default('localhost'),
+  chromaPort: z.number().default(8000),
+  chunkSize: z.number().min(100).max(2000).default(500),
+  chunkOverlap: z.number().min(0).max(500).default(50),
+  topK: z.number().min(1).max(20).default(5),
+  port: z.number().default(3000),
+  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+});
+
+export const config = configSchema.parse({
+  openaiApiKey: Bun.env.OPENAI_API_KEY,
+  chromaHost: Bun.env.CHROMA_HOST,
+  chromaPort: Number(Bun.env.CHROMA_PORT),
+  // ...
+});
+```
+
+---
 
 ## Intégrations externes
 
 | Système | Type | Protocole | Authentification |
 | ------- | ---- | --------- | ---------------- |
-| OpenAI API | Embeddings + LLM | HTTPS REST | API Key (Bearer) |
-| ChromaDB | Vector Store | HTTP REST | None (local) |
+| OpenAI API | Embedding + LLM | HTTPS REST | API Key (Bearer) |
+| ChromaDB | Vector Store | HTTP REST | Aucune (local) |
+
+---
 
 ## Exigences non-fonctionnelles
 
 | Catégorie | Exigence | Cible |
 | --------- | -------- | ----- |
-| Performance | Temps de réponse query | < 5s (p95) |
-| Performance | Temps d'ingestion | < 1s/document (petit) |
-| Disponibilité | Uptime dev | Best effort |
-| Sécurité | API Keys | Variables d'environnement, non versionnées |
-| Sécurité | CORS | Configuré pour frontend uniquement |
-| Maintenabilité | Couverture tests | > 70% |
-| Observabilité | Logs | Structurés JSON (pino) |
+| **Performance** | Temps de réponse query | < 5s (p95) |
+| **Performance** | Temps d'embedding | < 500ms par chunk |
+| **Performance** | Temps de recherche vectorielle | < 100ms |
+| **Disponibilité** | Uptime dev | Best effort |
+| **Scalabilité** | Nombre de documents | < 1000 (prototype) |
+| **Scalabilité** | Taille corpus | < 100 Mo |
+| **Sécurité** | API Key | Non exposée côté client |
+| **Sécurité** | Validation input | Zod sur toutes les entrées |
 
-## Dépendances npm
+---
 
-### Backend (backend/package.json)
+## Dépendances Bun (package.json backend)
 
 ```json
 {
+  "name": "rag-tp-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
-    "express": "^4.18.0",
+    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.0",
-    "zod": "^3.22.0",
-    "pino": "^8.16.0",
-    "pino-pretty": "^10.2.0",
-    "openai": "^4.20.0",
-    "chromadb": "^1.7.0",
-    "better-sqlite3": "^9.2.0",
+    "zod": "^3.22.4",
+    "openai": "^4.28.0",
+    "chromadb": "^1.7.3",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.0",
-    "@types/cors": "^2.8.0",
-    "@types/better-sqlite3": "^7.6.0",
-    "@types/uuid": "^9.0.0",
-    "typescript": "^5.3.0",
-    "tsx": "^4.6.0",
-    "vitest": "^1.0.0"
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3"
   }
 }
 ```
 
-### Frontend (frontend/package.json)
+---
+
+## Dépendances Bun (package.json frontend)
 
 ```json
 {
+  "name": "rag-tp-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bunx --bun vite",
+    "build": "bunx --bun vite build",
+    "preview": "bunx --bun vite preview"
+  },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.3.0",
-    "vite": "^5.0.0"
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
   }
 }
 ```
 
-## Docker Compose (développement)
+---
+
+## Commandes Bun courantes
+
+| Action | Commande |
+|--------|----------|
+| Installer les dépendances | `bun install` |
+| Lancer le backend en dev | `bun run dev` |
+| Lancer le frontend en dev | `cd frontend && bun run dev` |
+| Exécuter les tests | `bun test` |
+| Build production frontend | `cd frontend && bun run build` |
+| Ajouter une dépendance | `bun add <package>` |
+| Ajouter une devDependency | `bun add -d <package>` |
+
+---
+
+## Docker Compose (ChromaDB)
 
 ```yaml
-# docker-compose.yml
 version: '3.8'
 
 services:
@@ -482,20 +436,13 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - chroma_data:/chroma/chroma
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
 
 volumes:
-  chroma_data:
+  chroma-data:
 ```
 
-## Scripts de développement
-
-| Script | Commande | Description |
-| ------ | -------- | ----------- |
-| Backend dev | `npm run dev` | Lance le serveur avec tsx watch |
-| Backend build | `npm run build` | Compile TypeScript |
-| Frontend dev | `npm run dev` | Lance Vite dev server |
-| Frontend build | `npm run build` | Build production |
-| Tests | `npm test` | Lance vitest |
-| Lint | `npm run lint` | ESLint |
-| Docker up | `docker-compose up -d` | Lance ChromaDB |
+Lancement : `docker-compose up -d`

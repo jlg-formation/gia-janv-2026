@@ -4,7 +4,7 @@
   "brief_modified_at": "2026-01-28T09:30:44.4375426Z",
   "brief_hash": "94e751439600c6fbb2eeb1d77a05066882b9f7931c5bb8895a66738d6ae683c1",
   "created_at": "2026-01-28T09:28:47.1862416Z",
-  "updated_at": "2026-01-28T12:00:00.0000000Z",
+  "updated_at": "2026-01-28T15:00:00.0000000Z",
   "documents": {
     "00-vision": {
       "status": "done",
@@ -40,25 +40,27 @@
     },
     "04-decisions-architectures": {
       "status": "done",
-      "version": 2,
-      "updated_at": "2026-01-28T11:35:00.0000000Z",
-      "lines": 310,
+      "version": 3,
+      "updated_at": "2026-01-28T15:00:00.0000000Z",
+      "lines": 398,
       "depends_on": ["03-specifications-fonctionnelles"],
-      "note": "Regenerated with TypeScript stack per clarification 002"
+      "note": "Regenerated with Bun stack per clarification 004"
     },
     "05-specifications-techniques": {
       "status": "done",
-      "version": 1,
-      "updated_at": "2026-01-28T11:40:00.0000000Z",
-      "lines": 350,
-      "depends_on": ["04-decisions-architectures"]
+      "version": 2,
+      "updated_at": "2026-01-28T15:00:00.0000000Z",
+      "lines": 380,
+      "depends_on": ["04-decisions-architectures"],
+      "note": "Regenerated with Bun stack per clarification 004"
     },
     "06-codage-guidelines": {
       "status": "done",
-      "version": 1,
-      "updated_at": "2026-01-28T11:50:00.0000000Z",
-      "lines": 280,
-      "depends_on": ["05-specifications-techniques"]
+      "version": 2,
+      "updated_at": "2026-01-28T15:00:00.0000000Z",
+      "lines": 395,
+      "depends_on": ["05-specifications-techniques"],
+      "note": "Regenerated with Bun commands per clarification 004"
     },
     "07-refactoring-rules": {
       "status": "done",
@@ -76,14 +78,15 @@
     },
     "09-integration-deploiement": {
       "status": "done",
-      "version": 1,
-      "updated_at": "2026-01-28T11:58:00.0000000Z",
-      "lines": 340,
+      "version": 2,
+      "updated_at": "2026-01-28T15:00:00.0000000Z",
+      "lines": 365,
       "depends_on": [
         "06-codage-guidelines",
         "07-refactoring-rules",
         "08-tests-verification"
-      ]
+      ],
+      "note": "Regenerated with Bun CI/CD pipeline per clarification 004"
     },
     "10-maintenance-exploitation": {
       "status": "done",
@@ -95,7 +98,7 @@
   },
   "clarifications": {
     "pending": [],
-    "resolved": ["002-langage-normalise"]
+    "resolved": ["002-langage-normalise", "004-bun-normalise"]
   },
   "blocked_by_clarifications": false,
   "validation": {

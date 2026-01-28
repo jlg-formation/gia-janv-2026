@@ -2,7 +2,7 @@
 
 ## Contexte architectural
 
-Ce document recense les décisions architecturales prises pour le prototype RAG (Retrieval-Augmented Generation). Suite à la clarification 002, le projet adopte une stack **TypeScript/React/Node.js** au lieu de Python.
+Ce document recense les décisions architecturales prises pour le prototype RAG (Retrieval-Augmented Generation). Suite aux clarifications 002 et 004, le projet adopte une stack **TypeScript/React/Bun** avec **Express** (via compatibilité Bun).
 
 ### Vue d'ensemble (OBLIGATOIRE)
 
@@ -13,7 +13,7 @@ graph TB
         QUERY[Query Input]
         RESULTS[Results Display]
     end
-    subgraph "Backend Node.js"
+    subgraph "Backend Bun + Express"
         API[Express API]
         INGEST[Ingestion Service]
         CHUNK[Chunker Service]
@@ -45,38 +45,72 @@ graph TB
 
 ## Registre des décisions
 
-### ADR-001 : Langage de développement — TypeScript
+### ADR-001 : Runtime JavaScript — Bun
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté (modifié via clarification 002) |
+| Statut    | Accepté (clarification 004) |
 | Décideurs | Utilisateur (clarification) |
 
 #### Contexte
 
-La clarification utilisateur `001-langage.md` a explicitement demandé TypeScript/React. Cette décision prévaut sur le choix initial Python selon la règle C7 (précédence).
+La clarification utilisateur `003-bun.md` (normalisée en `004-bun-normalise.md`) a explicitement demandé **Bun** au lieu de Node.js/npm. Cette décision prévaut sur la clarification 002 selon la règle C7 (précédence).
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **TypeScript** | Typage statique, écosystème React mature, full-stack JS | Écosystème ML/NLP moins riche que Python |
+| **Bun** | 4x plus rapide, TypeScript natif, gestionnaire de paquets intégré, bundler inclus | Moins mature que Node.js |
+| Node.js | Écosystème très mature, large communauté | Décision annulée par clarification 004 |
+
+#### Décision
+
+**Bun** est retenu comme runtime JavaScript/TypeScript pour tout le projet. Bun remplace :
+- **Node.js** comme runtime
+- **npm/yarn/pnpm** comme gestionnaire de paquets
+- **esbuild/webpack** pour le bundling TypeScript
+
+#### Conséquences
+
+- **Positives** : Performances accrues, support TypeScript natif (pas de transpilation), installation des dépendances ultra-rapide.
+- **Négatives** : Quelques modules npm peuvent avoir des incompatibilités (rares).
+- **Risques** : Bun étant plus récent, certains edge cases peuvent survenir. Express fonctionne via la couche de compatibilité.
+
+---
+
+### ADR-002 : Langage de développement — TypeScript
+
+| Attribut  | Valeur   |
+| --------- | -------- |
+| Date      | 2026-01-28 |
+| Statut    | Accepté (clarification 002) |
+| Décideurs | Utilisateur (clarification) |
+
+#### Contexte
+
+La clarification utilisateur `001-langage.md` a explicitement demandé TypeScript/React. Bun supporte TypeScript nativement sans configuration.
+
+#### Options considérées
+
+| Option | Avantages | Inconvénients |
+| ------ | --------- | ------------- |
+| **TypeScript** | Typage statique, écosystème React mature, support natif Bun | Écosystème ML/NLP moins riche que Python |
 | Python | Écosystème NLP/LLM très riche | Décision annulée par clarification |
 
 #### Décision
 
-**TypeScript** est retenu pour l'ensemble du projet (frontend et backend).
+**TypeScript** est retenu pour l'ensemble du projet (frontend et backend). Avec Bun, aucune transpilation n'est nécessaire.
 
 #### Conséquences
 
-- **Positives** : Stack unifiée, partage de types entre front et back, écosystème npm riche.
+- **Positives** : Stack unifiée, partage de types entre front et back, exécution TypeScript native.
 - **Négatives** : Moins de libs ML natives, dépendance aux APIs externes pour embeddings.
-- **Risques** : Certaines fonctionnalités RAG avancées moins accessibles qu'en Python.
+- **Risques** : Aucun majeur pour ce projet.
 
 ---
 
-### ADR-002 : Framework Frontend — React
+### ADR-003 : Framework Frontend — React + Vite
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -92,55 +126,55 @@ Le frontend doit permettre de saisir des questions, afficher les réponses et le
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **React** | Demandé par l'utilisateur, large écosystème, composants réutilisables | Nécessite configuration build |
+| **React + Vite** | Demandé par l'utilisateur, Vite compatible Bun, HMR rapide | Config initiale |
 | Vue.js | Simplicité, bonne DX | Non demandé |
 | Vanilla JS | Pas de dépendances | Moins maintenable |
 
 #### Décision
 
-**React** avec TypeScript. Utilisation de Vite pour le bundling.
+**React** avec TypeScript, bundlé par **Vite** (compatible Bun). Commande de dev : `bun run dev`.
 
 #### Conséquences
 
-- **Positives** : Composants modulaires, hot reload, large communauté.
+- **Positives** : Composants modulaires, hot reload ultra-rapide avec Bun + Vite.
 - **Négatives** : Complexité initiale vs vanilla.
 - **Risques** : Aucun majeur pour un prototype.
 
 ---
 
-### ADR-003 : Framework Backend — Express.js
+### ADR-004 : Framework Backend — Express.js (via compatibilité Bun)
 
 | Attribut  | Valeur   |
 | --------- | -------- |
 | Date      | 2026-01-28 |
-| Statut    | Accepté |
+| Statut    | Accepté (clarification 004) |
 | Décideurs | Utilisateur (clarification) |
 
 #### Contexte
 
-Le backend expose une API REST pour l'ingestion et les requêtes RAG.
+Le backend expose une API REST pour l'ingestion et les requêtes RAG. Bun est compatible avec Express.
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **Express.js** | Standard de facto, simple, middleware riche | Performances moyennes |
-| Fastify | Performant, schéma JSON intégré | Moins de middlewares tiers |
-| Next.js API Routes | Full-stack intégré | Moins flexible pour API pure |
+| **Express.js** | Standard de facto, middleware riche, compatible Bun | Performances inférieures à Hono/Elysia |
+| Hono | Natif Bun, ultra-performant | Moins de middlewares |
+| Elysia | TypeScript-first, natif Bun | Moins d'exemples |
 
 #### Décision
 
-**Express.js** pour sa simplicité et son écosystème. Fastify est une alternative acceptable si la performance devient critique.
+**Express.js** exécuté via Bun pour bénéficier de l'écosystème mature d'Express tout en profitant des performances de Bun.
 
 #### Conséquences
 
 - **Positives** : Démarrage rapide, nombreux exemples, middlewares disponibles.
-- **Négatives** : Moins performant que Fastify pour du high-throughput.
-- **Risques** : Aucun pour un prototype.
+- **Négatives** : Moins performant que Hono/Elysia natifs.
+- **Risques** : Aucun pour un prototype — Express fonctionne parfaitement sous Bun.
 
 ---
 
-### ADR-004 : Base de données vectorielle — ChromaDB ou Qdrant
+### ADR-005 : Base de données vectorielle — ChromaDB ou Qdrant
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -158,7 +192,7 @@ Le pipeline RAG requiert une base vectorielle pour stocker les embeddings et ex�
 | ------ | --------- | ------------- |
 | **ChromaDB** | Open-source, API REST, client JS disponible | Moins mature que FAISS |
 | **Qdrant** | Performant, API REST, client TypeScript | Service à lancer séparément |
-| FAISS | Performant | Pas de binding Node.js natif simple |
+| FAISS | Performant | Pas de binding natif simple |
 | Pinecone | Managed, scalable | Coût, dépendance cloud |
 
 #### Décision
@@ -167,13 +201,13 @@ Le pipeline RAG requiert une base vectorielle pour stocker les embeddings et ex�
 
 #### Conséquences
 
-- **Positives** : API REST accessible depuis Node.js, persistance intégrée.
+- **Positives** : API REST accessible depuis Bun, persistance intégrée.
 - **Négatives** : Nécessite Docker pour le serveur ChromaDB/Qdrant.
 - **Risques** : Si Docker non disponible, envisager une solution in-memory.
 
 ---
 
-### ADR-005 : Modèle d'embedding — API OpenAI ou Transformers.js
+### ADR-006 : Modèle d'embedding — API OpenAI ou Transformers.js
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -205,7 +239,7 @@ Les chunks doivent être vectorisés. En TypeScript, les options locales sont pl
 
 ---
 
-### ADR-006 : LLM — API OpenAI GPT-4o-mini
+### ADR-007 : LLM — API OpenAI GPT-4o-mini
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -215,14 +249,14 @@ Les chunks doivent être vectorisés. En TypeScript, les options locales sont pl
 
 #### Contexte
 
-La génération de réponse nécessite un LLM. Le SDK OpenAI pour Node.js est mature.
+La génération de réponse nécessite un LLM. Le SDK OpenAI fonctionne parfaitement avec Bun.
 
 #### Options considérées
 
 | Option | Avantages | Inconvénients |
 | ------ | --------- | ------------- |
-| **OpenAI GPT-4o-mini** | Qualité, SDK Node.js, coût raisonnable | Requiert clé API |
-| Anthropic Claude | Qualité | Moins d'exemples Node.js |
+| **OpenAI GPT-4o-mini** | Qualité, SDK compatible Bun, coût raisonnable | Requiert clé API |
+| Anthropic Claude | Qualité | SDK compatible mais moins d'exemples |
 | Ollama (local) | Gratuit, offline | Nécessite installation, GPU recommandé |
 
 #### Décision
@@ -237,7 +271,7 @@ La génération de réponse nécessite un LLM. Le SDK OpenAI pour Node.js est ma
 
 ---
 
-### ADR-007 : Architecture logicielle — Modules découplés
+### ADR-008 : Architecture logicielle — Modules découplés
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -254,19 +288,27 @@ Le prototype doit être maintenable, testable et extensible.
 Architecture en **modules découplés** :
 
 ```
-src/
-├── api/           # Routes Express
-├── services/
-│   ├── ingestion/ # Loader, Chunker
-│   ├── embedding/ # Embedding service
-│   ├── search/    # Vector search
-│   └── generation/# Prompt builder, LLM caller
-├── repositories/  # Vector store, metadata store
-├── config/        # Configuration
-└── types/         # TypeScript interfaces
+project/
+├── backend/
+│   └── src/
+│       ├── api/           # Routes Express
+│       ├── services/
+│       │   ├── ingestion/ # Loader, Chunker
+│       │   ├── embedding/ # Embedding service
+│       │   ├── search/    # Vector search
+│       │   └── generation/# Prompt builder, LLM caller
+│       ├── repositories/  # Vector store, metadata store
+│       ├── config/        # Configuration
+│       └── types/         # TypeScript interfaces
+├── frontend/
+│   └── src/
+│       ├── components/    # React components
+│       ├── hooks/         # Custom hooks
+│       ├── services/      # API calls
+│       └── types/         # TypeScript types
+└── shared/
+    └── types/             # Types partagés front/back
 ```
-
-Chaque service expose une interface permettant de substituer l'implémentation.
 
 #### Conséquences
 
@@ -275,7 +317,7 @@ Chaque service expose une interface permettant de substituer l'implémentation.
 
 ---
 
-### ADR-008 : Gestion de la configuration — dotenv + fichier config
+### ADR-009 : Gestion de la configuration — .env natif Bun + config.ts
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -289,17 +331,17 @@ De nombreux paramètres sont configurables (chunk size, top-k, clé API, etc.).
 
 #### Décision
 
-- Variables d'environnement via `dotenv` (fichier `.env` non versionné)
+- Variables d'environnement via fichier `.env` (Bun supporte nativement `.env` via `Bun.env`)
 - Fichier `config.ts` centralisant les valeurs par défaut et la validation (avec `zod`)
 
 #### Conséquences
 
-- **Positives** : Secrets protégés, configuration typée.
+- **Positives** : Secrets protégés, configuration typée, pas besoin de `dotenv` (natif Bun).
 - **Négatives** : Nécessite de documenter les variables.
 
 ---
 
-### ADR-009 : Persistance des métadonnées — SQLite avec better-sqlite3
+### ADR-010 : Persistance des métadonnées — SQLite avec bun:sqlite
 
 | Attribut  | Valeur   |
 | --------- | -------- |
@@ -313,11 +355,11 @@ Les métadonnées (texte du chunk, document source) doivent être stockées.
 
 #### Décision
 
-**SQLite** via `better-sqlite3` (synchrone, performant). Table `chunks` avec id, doc_id, text, position.
+**SQLite** via `bun:sqlite` (API native Bun, synchrone, ultra-performante). Table `chunks` avec id, doc_id, text, position.
 
 #### Conséquences
 
-- **Positives** : Requêtes SQL flexibles, pas de serveur.
+- **Positives** : Requêtes SQL flexibles, pas de serveur, API native Bun (pas de dépendance npm).
 - **Négatives** : Fichier .db à gérer.
 
 ---
@@ -330,7 +372,8 @@ Les métadonnées (texte du chunk, document source) doivent être stockées.
 | **Configuration externalisée** | Aucun paramètre codé en dur | Reproductibilité |
 | **Typage strict** | TypeScript strict mode activé | Fiabilité, autocomplétion |
 | **Fail-fast** | Erreurs détectées au plus tôt (validation zod) | Débogage simplifié |
-| **Observabilité** | Logs structurés (pino), affichage des scores et sources | Compréhension du comportement RAG |
+| **Observabilité** | Logs structurés, affichage des scores et sources | Compréhension du comportement RAG |
+| **Bun-first** | Privilégier les APIs natives Bun quand disponibles | Performance optimale |
 
 ---
 
@@ -338,11 +381,13 @@ Les métadonnées (texte du chunk, document source) doivent être stockées.
 
 | Contrainte | Impact | Source |
 | ---------- | ------ | ------ |
-| TypeScript/React imposé | Stack unifiée JS | Clarification utilisateur |
+| Bun comme runtime | Remplace Node.js et npm | Clarification 004 |
+| TypeScript/React imposé | Stack unifiée JS | Clarification 002 |
+| Express via compatibilité | Framework backend | Clarification 004 |
 | Corpus de petite taille | Pas besoin de sharding | Brief |
 | Accès API LLM optionnel | Prévoir mode mock | Brief |
 | Temps de réponse < 5s | Limiter top-k, optimiser | Brief |
-| Node.js 20+ | Support ESM, fetch natif | Best practice |
+| Bun 1.x+ | Support complet TypeScript natif | Best practice |
 
 ---
 
@@ -352,7 +397,7 @@ Les métadonnées (texte du chunk, document source) doivent être stockées.
 sequenceDiagram
     participant U as Utilisateur
     participant FE as React Frontend
-    participant API as Express API
+    participant API as Bun + Express API
     participant EMB as Embedding Service
     participant VS as Vector Store
     participant GEN as Generation Service
@@ -378,12 +423,13 @@ sequenceDiagram
 
 | ID | Titre | Décision | Statut |
 |----|-------|----------|--------|
-| ADR-001 | Langage | TypeScript | Accepté |
-| ADR-002 | Frontend | React | Accepté |
-| ADR-003 | Backend | Express.js | Accepté |
-| ADR-004 | Vector Store | ChromaDB / Qdrant | Accepté |
-| ADR-005 | Embedding | OpenAI / Transformers.js | Accepté |
-| ADR-006 | LLM | OpenAI GPT-4o-mini | Accepté |
-| ADR-007 | Architecture | Modules découplés | Accepté |
-| ADR-008 | Configuration | dotenv + config.ts | Accepté |
-| ADR-009 | Métadonnées | SQLite (better-sqlite3) | Accepté |
+| ADR-001 | Runtime | **Bun** | Accepté (clarification 004) |
+| ADR-002 | Langage | TypeScript | Accepté (clarification 002) |
+| ADR-003 | Frontend | React + Vite | Accepté |
+| ADR-004 | Backend | Express.js (via Bun) | Accepté (clarification 004) |
+| ADR-005 | Vector Store | ChromaDB / Qdrant | Accepté |
+| ADR-006 | Embedding | OpenAI / Transformers.js | Accepté |
+| ADR-007 | LLM | OpenAI GPT-4o-mini | Accepté |
+| ADR-008 | Architecture | Modules découplés | Accepté |
+| ADR-009 | Configuration | .env natif Bun + config.ts | Accepté |
+| ADR-010 | Métadonnées | SQLite (bun:sqlite) | Accepté |
