@@ -1,6 +1,6 @@
 # TODO — RAG-TP (Retrieval-Augmented Generation)
 
-> Dernière mise à jour : 2026-01-28 14:12
+> Dernière mise à jour : 2026-01-28 16:30
 > Progression : 3/38 tâches (8%)
 
 ## 🎯 Objectif actuel
@@ -229,7 +229,12 @@ _(Aucune tâche en cours)_
 
 ## ✅ Terminé
 
-_(Aucune tâche terminée)_
+- [x] `id001` — Créer la structure de dossiers du projet _(2026-01-28)_
+  - 📁 Fichiers : `project/frontend/`, `project/backend/`, `project/shared/`, `project/data/`
+- [x] `id002` — Initialiser le backend Node.js avec TypeScript et Express _(2026-01-28)_
+  - 📁 Fichiers : `project/backend/package.json`, `project/backend/tsconfig.json`, `project/backend/src/index.ts`
+- [x] `id003` — Initialiser le frontend React avec Vite et TypeScript _(2026-01-28)_
+  - 📁 Fichiers : `project/frontend/package.json`, `project/frontend/tsconfig.json`, `project/frontend/vite.config.ts`
 
 ---
 
@@ -237,24 +242,24 @@ _(Aucune tâche terminée)_
 
 | Phase | Total | Terminées | En cours | À faire |
 |-------|-------|-----------|----------|---------|
-| Phase 0 — Setup | 5 | 0 | 0 | 5 |
+| Phase 0 — Setup | 5 | 3 | 0 | 2 |
 | Phase 1 — Ingestion | 9 | 0 | 0 | 9 |
 | Phase 2 — Recherche | 8 | 0 | 0 | 8 |
 | Phase 3 — Frontend | 7 | 0 | 0 | 7 |
 | Phase 4 — Tests | 4 | 0 | 0 | 4 |
 | Phase 5 — Démo | 3 | 0 | 0 | 3 |
-| **TOTAL** | **38** | **0** | **0** | **38** |
+| **TOTAL** | **38** | **3** | **0** | **35** |
 
 ---
 
 ## 🔍 Notes
 
 ### Dépendances techniques
-- **Node.js 20.x** requis
+- **Bun 1.x** requis (remplace Node.js selon clarification 004)
 - **Docker** requis pour ChromaDB
 - **Clé API OpenAI** requise (ou mode mock)
 
 ### Prochaines actions recommandées
-1. Commencer par `id001` (structure de dossiers)
-2. Puis `id002` et `id003` en parallèle (init backend + frontend)
-3. Finaliser la Phase 0 pour débloquer la Phase 1
+1. Compléter `id004` (.env.example) et `id005` (docker-compose.yml) pour finaliser Phase 0
+2. Puis `id010` et `id011` (types et config) pour débloquer Phase 1
+3. Focus sur le pipeline ingestion (`id012` → `id017` → `id018`)

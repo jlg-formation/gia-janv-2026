@@ -198,3 +198,72 @@ Si une **zone d'ombre** est détectée pendant l'analyse :
 ### Idempotence
 
 Exécuter ce prompt plusieurs fois avec le même état projet doit produire le **même fichier TODO.md** (à la date près).
+
+---
+
+## 🔐 Procédure OBLIGATOIRE de mise à jour (CRITIQUE)
+
+> ⚠️ **CETTE SECTION EST NON-NÉGOCIABLE** — Suivre ces étapes dans l'ordre exact.
+
+### Étape 1 — Lecture du TODO existant (OBLIGATOIRE)
+
+**AVANT toute analyse ou modification**, tu DOIS :
+
+1. **Appeler `read_file`** sur `/TODO.md` pour lire le fichier complet
+2. **Extraire et lister** TOUTES les tâches marquées `[x]` (terminées)
+3. **Afficher explicitement** dans ta réponse : "📋 Tâches terminées préservées : id001, id002, ..."
+
+```
+# Exemple de sortie attendue :
+📋 Tâches terminées préservées (3) :
+- [x] `id001` — Créer la structure de dossiers _(2025-01-20)_
+- [x] `id002` — Initialiser le backend _(2025-01-21)_
+- [x] `id003` — Initialiser le frontend _(2025-01-21)_
+```
+
+### Étape 2 — Analyse du projet
+
+Seulement APRÈS l'étape 1, analyser :
+- `/docs` — Documentation technique
+- `/clarifications` — Décisions prises
+- `/project` — Code source existant
+
+### Étape 3 — Modification incrémentale (PAS de recréation)
+
+**INTERDIT** : Utiliser `create_file` pour TODO.md
+**OBLIGATOIRE** : Utiliser `replace_string_in_file` pour modifier le fichier existant
+
+Si le fichier n'existe pas, alors seulement utiliser `create_file`.
+
+### Étape 4 — Vérification post-modification
+
+Après chaque modification, **vérifier** :
+
+```
+✅ Checklist de validation :
+- [ ] Toutes les tâches `[x]` de l'étape 1 sont présentes dans le fichier final
+- [ ] Les dates de complétion sont conservées
+- [ ] Le compteur de progression inclut les tâches terminées
+```
+
+### Étape 5 — Rapport de conformité
+
+Terminer par un rapport :
+
+```
+📊 Rapport de mise à jour :
+- Tâches terminées préservées : X
+- Tâches ajoutées : Y
+- Tâches modifiées : Z
+- Tâches supprimées : W (uniquement des [ ])
+```
+
+---
+
+## 🚨 Erreurs fatales (STOP immédiat)
+
+Si l'une de ces situations se produit, **ARRÊTER** et demander confirmation :
+
+1. **Aucune tâche `[x]` trouvée** alors que le fichier existait → Relire le fichier
+2. **Moins de tâches `[x]` après modification** → Annuler et recommencer
+3. **Utilisation de `create_file` sur un TODO.md existant** → Interdit
