@@ -1,7 +1,7 @@
 # TODO — RAG-TP (Retrieval-Augmented Generation)
 
-> Dernière mise à jour : 2026-01-28 12:00
-> Progression : 1/38 tâches (3%)
+> Dernière mise à jour : 2026-01-28 14:12
+> Progression : 2/38 tâches (5%)
 
 ## 🎯 Objectif actuel
 
@@ -18,7 +18,7 @@
   - 🔗 Dépend de : —
   - 📄 Réf : [05-specifications-techniques.md](docs/05-specifications-techniques.md) (Structure du projet)
 
-- [ ] `id002` — Initialiser le backend Node.js avec TypeScript et Express
+- [x] `id002` — Initialiser le backend Node.js avec TypeScript et Express
   - 📁 Fichiers : `project/backend/package.json`, `project/backend/tsconfig.json`, `project/backend/src/index.ts`
   - 🔗 Dépend de : `id001`
   - 📄 Réf : [04-decisions-architectures.md](docs/04-decisions-architectures.md) (ADR-003)
